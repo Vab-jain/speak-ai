@@ -15,7 +15,7 @@ export const DRILL_TYPES = {
 // Approximate active drill duration in seconds
 const DRILL_DURATION_SECONDS = {
   [DRILL_TYPES.ONE_MINUTE_SPEECH]: 60,
-  [DRILL_TYPES.SHADOW]: 45,
+  [DRILL_TYPES.SHADOW]: 90,
   [DRILL_TYPES.KEYWORDS]: 60,
   [DRILL_TYPES.LEVEL_EXPLAIN]: 120,
   [DRILL_TYPES.FILLER_RESET]: 60,
@@ -43,12 +43,8 @@ export function generateSession(durationMinutes, mode) {
 
   const drills = [];
   for (let i = 0; i < drillCount; i++) {
-    // For now, bias towards ONE_MINUTE_SPEECH since it's the only one implemented
-    // But include others to test the "coming soon" UI
-    const type = Math.random() > 0.6 
-      ? types[Math.floor(Math.random() * types.length)] 
-      : DRILL_TYPES.ONE_MINUTE_SPEECH;
-
+    // Pick a random type from all available types
+    const type = types[Math.floor(Math.random() * types.length)];
     drills.push(createDrill(type, mode));
   }
 

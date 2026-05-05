@@ -263,16 +263,22 @@ const DrillPage = () => {
             exit={{ opacity: 0, y: -20 }}
             className="flex flex-col items-center text-center w-full mt-4"
           >
-            {currentDrillPlan?.type === DRILL_TYPES.ONE_MINUTE_SPEECH ? (
+            {(currentDrillPlan?.type === DRILL_TYPES.ONE_MINUTE_SPEECH || currentDrillPlan?.type === DRILL_TYPES.SHADOW) ? (
               <>
                 <span className="text-text-secondary uppercase tracking-widest font-semibold mb-4 text-sm">
-                  Your Topic
+                  {currentDrillPlan?.type === DRILL_TYPES.ONE_MINUTE_SPEECH ? 'Your Topic' : 'Shadow This'}
                 </span>
-                <h1 className="text-5xl md:text-6xl font-extrabold mb-12 leading-tight">
+                <h1 className={`font-extrabold mb-12 leading-tight ${
+                  currentDrillPlan?.type === DRILL_TYPES.SHADOW 
+                    ? 'text-3xl md:text-4xl text-left bg-white/5 p-8 rounded-2xl border border-white/10' 
+                    : 'text-5xl md:text-6xl text-center'
+                }`}>
                   {currentPrompt}
                 </h1>
                 <p className="text-text-secondary mb-12 max-w-lg">
-                  Take a moment to gather your thoughts. You will speak for {currentDrillPlan.durationSeconds} seconds about this topic.
+                  {currentDrillPlan?.type === DRILL_TYPES.ONE_MINUTE_SPEECH 
+                    ? `Take a moment to gather your thoughts. You will speak for ${currentDrillPlan.durationSeconds} seconds about this topic.`
+                    : `Read the text above, then speak it back naturally. You can repeat it exactly or paraphrase. You have ${currentDrillPlan.durationSeconds} seconds.`}
                 </p>
                 <button 
                   onClick={startDrill}

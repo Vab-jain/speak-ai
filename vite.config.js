@@ -21,5 +21,10 @@ export default defineConfig({
   plugins: [react()],
   define: {
     'import.meta.env.VITE_GROQ_API_KEY': JSON.stringify(groqApiKey)
-  }
+  },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: './src/setupTests.js',
+  },
 })

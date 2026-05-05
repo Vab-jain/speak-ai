@@ -23,7 +23,7 @@ Rules:
 1. Output ONLY the prompt text, nothing else. No quotes, no intro.
 2. Keep it concise and actionable.
 3. If type is ONE_MINUTE_SPEECH, it should be a broad question or statement to discuss.
-4. If type is SHADOW, provide a single impactful sentence to repeat.
+4. If type is SHADOW, provide a rich, speakable sentence or a short paragraph (2-3 sentences) to repeat or paraphrase.
 5. If type is KEYWORDS, ask them to list keywords for a specific topic.
 6. If type is LEVEL_EXPLAIN, ask them to explain a specific topic at two difficulty levels.
 7. If type is FILLER_RESET, ask them to explain a topic without using fillers.`;
@@ -107,6 +107,7 @@ Focus on:
 - Structure and clarity of thoughts.
 - Relevance to the prompt.
 - Use of vocabulary.
+${prompt.toLowerCase().includes('shadow') ? '- Delivery fluency and paraphrasing quality (if they paraphrased instead of repeating exactly).' : ''}
 Do not mention filler words if there are any, as those are tracked separately. Do not include introductory phrases like "Here is your feedback" or "As a coach". Just provide the feedback directly.`;
 
   try {
