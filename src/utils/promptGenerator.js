@@ -1,9 +1,10 @@
 /**
  * Prompt Generator
  * Picks a drill topic from the user's configured topic list.
- * Fully synchronous — no API calls.
- * (Groq LLM prompt generation deferred to Issue #3b)
+ * Now uses Groq LLM for dynamic prompt generation (Issue #3b).
  */
+
+import { generateGroqPrompt } from './groqClient';
 
 const FALLBACK_TECHNICAL = [
   'Machine Learning',
@@ -24,20 +25,34 @@ const FALLBACK_GENERAL = [
 ];
 
 /**
- * Picks a random topic from the user's topic list for a drill.
+ * Picks a random topic from the user's topic list for a drill, ideally using Groq API.
  *
  * @param {string} type - The drill type
  * @param {'technical'|'general'} mode
  * @param {string[]} topics - User-configured topic list
- * @returns {string} The selected topic/prompt
+ * @returns {Promise<string>} The selected topic/prompt
  */
-export function generatePrompt(type, mode, topics) {
-  // Use existing logic for ONE_MINUTE_SPEECH
-  if (type === 'ONE_MINUTE_SPEECH') {
-    return generateOneMinuteSpeechPrompt(mode, topics);
+export async function generatePrompt(type, mode, topics) {
+  try {
+    const prompt = await generateGroqPrompt(type, mode, topics);
+    return prompt;
+  } catch (err) {
+    console.error("Groq generation failed, falling back to local generation", err);
+    return generateLocalPrompt(type, mode, topics);
   }
+}
 
-  // Fallback for other types until they are implemented
+/**
+ * Legacy wrapper for One-Minute Speech (now async)
+ */
+export async function generateOneMinuteSpeechPrompt(mode, topics) {
+  return generatePrompt('ONE_MINUTE_SPEECH', mode, topics);
+}
+
+/**
+ * Local fallback generation
+ */
+function generateLocalPrompt(type, mode, topics) {
   const pool =
     topics && topics.length > 0
       ? topics
@@ -59,20 +74,5 @@ export function generatePrompt(type, mode, topics) {
     default:
       return topic;
   }
-}
-
-/**
- * Legacy wrapper for One-Minute Speech
- */
-export function generateOneMinuteSpeechPrompt(mode, topics) {
-  const pool =
-    topics && topics.length > 0
-      ? topics
-      : mode === 'technical'
-      ? FALLBACK_TECHNICAL
-      : FALLBACK_GENERAL;
-
-  const idx = Math.floor(Math.random() * pool.length);
-  return pool[idx];
 }
 

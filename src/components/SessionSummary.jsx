@@ -1,9 +1,29 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Save, ChevronDown, ChevronUp } from 'lucide-react';
+import { generateFeedback } from '../utils/groqClient';
 
 const DrillAccordion = ({ drill, index }) => {
   const [isOpen, setIsOpen] = useState(index === 0);
+  const [feedback, setFeedback] = useState(null);
+  const [isLoadingFeedback, setIsLoadingFeedback] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && !feedback && drill.transcript) {
+      const fetchFeedback = async () => {
+        setIsLoadingFeedback(true);
+        try {
+          const res = await generateFeedback(drill.transcript, drill.prompt);
+          setFeedback(res);
+        } catch (error) {
+          setFeedback("Unable to generate feedback.");
+        } finally {
+          setIsLoadingFeedback(false);
+        }
+      };
+      fetchFeedback();
+    }
+  }, [isOpen, feedback, drill.transcript, drill.prompt]);
 
   return (
     <div className="border border-border rounded-xl overflow-hidden mb-4 bg-white/5">
@@ -31,9 +51,19 @@ const DrillAccordion = ({ drill, index }) => {
       
       {isOpen && (
         <div className="p-4 border-t border-border">
-          <div className="text-sm text-text-secondary leading-relaxed bg-black/20 p-4 rounded-lg">
+          <div className="text-sm text-text-secondary leading-relaxed bg-black/20 p-4 rounded-lg mb-4">
             {drill.transcript || <span className="italic opacity-50">No transcript recorded.</span>}
           </div>
+          {drill.transcript && (
+            <div className="bg-accent-primary/10 p-4 rounded-lg border border-accent-primary/20">
+              <h4 className="text-xs font-bold text-accent-primary uppercase tracking-wider mb-2">AI Coach Feedback</h4>
+              {isLoadingFeedback ? (
+                <div className="text-sm text-text-secondary animate-pulse">Analyzing your speech...</div>
+              ) : (
+                <p className="text-sm text-text-primary">{feedback}</p>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

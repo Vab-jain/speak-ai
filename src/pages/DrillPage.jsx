@@ -7,6 +7,7 @@ import { generateSession, swapDrill, removeDrill, DRILL_TYPES } from '../utils/s
 import { generatePrompt } from '../utils/promptGenerator';
 import { evaluateDrill } from '../utils/evaluationEngine';
 import { saveSession } from '../utils/progressStore';
+import { transcribeAudio } from '../utils/groqClient';
 
 import { useDrillTimer } from '../hooks/useDrillTimer';
 import { useLiveTranscript } from '../hooks/useLiveTranscript';
@@ -56,30 +57,33 @@ const DrillPage = () => {
 
   // Initialize session on mount
   useEffect(() => {
-    const duration = settings.durationPreference || 10;
-    const plan = generateSession(duration, queryMode);
-    
-    // Generate prompts for all drills initially for the preview
-    const planWithPrompts = plan.map(drill => ({
-      ...drill,
-      prompt: generatePrompt(
-        drill.type, 
-        queryMode, 
-        queryMode === 'technical' ? settings.technicalTopics : settings.generalTopics
-      )
-    }));
+    const initializeSession = async () => {
+      const duration = settings.durationPreference || 10;
+      const plan = generateSession(duration, queryMode);
+      
+      // Generate prompts for all drills initially for the preview
+      const planWithPrompts = await Promise.all(plan.map(async drill => ({
+        ...drill,
+        prompt: await generatePrompt(
+          drill.type, 
+          queryMode, 
+          queryMode === 'technical' ? settings.technicalTopics : settings.generalTopics
+        )
+      })));
 
-    setSessionPlan(planWithPrompts);
+      setSessionPlan(planWithPrompts);
+    };
+    initializeSession();
   }, []);
 
-  const handleSwap = (drillId) => {
+  const handleSwap = async (drillId) => {
     const newPlan = swapDrill(sessionPlan, drillId, queryMode);
     // Regenerate prompt for the swapped drill
-    const updatedPlan = newPlan.map(d => {
+    const updatedPlan = await Promise.all(newPlan.map(async d => {
       if (d.id === drillId) {
         return {
           ...d,
-          prompt: generatePrompt(
+          prompt: await generatePrompt(
             d.type, 
             queryMode, 
             queryMode === 'technical' ? settings.technicalTopics : settings.generalTopics
@@ -87,7 +91,7 @@ const DrillPage = () => {
         };
       }
       return d;
-    });
+    }));
     setSessionPlan(updatedPlan);
   };
 
@@ -125,10 +129,19 @@ const DrillPage = () => {
     transcript.stop();
     const audioBlob = await recorder.stop(); // We capture this even if we don't upload it yet
     
-    // Evaluate metrics using the local Web Speech API transcript
+    let finalTranscript = transcript.transcript;
+    if (audioBlob) {
+      try {
+        finalTranscript = await transcribeAudio(audioBlob);
+      } catch (err) {
+        console.error("Whisper transcription failed, using live transcript", err);
+      }
+    }
+
+    // Evaluate metrics using the final transcript
     const fillerWords = settings.fillerWords; // Defined in SettingsContext defaults
     const metrics = evaluateDrill(
-      transcript.transcript, 
+      finalTranscript, 
       currentDrillPlan?.durationSeconds || 60,
       fillerWords
     );
