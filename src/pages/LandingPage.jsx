@@ -3,10 +3,16 @@ import { motion } from 'framer-motion';
 import { Play, Flame, Clock, Cpu, MessageSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useSettings } from '../context/SettingsContext';
+import { getStreak } from '../utils/progressStore';
 
 const LandingPage = () => {
   const navigate = useNavigate();
   const { settings, updateSettings } = useSettings();
+  const [streak, setStreak] = React.useState(0);
+
+  React.useEffect(() => {
+    setStreak(getStreak());
+  }, []);
 
   return (
     <div className="max-w-4xl mx-auto px-6 pt-20 flex flex-col items-center text-center">
@@ -18,7 +24,7 @@ const LandingPage = () => {
       >
         <div className="inline-flex items-center gap-2 px-4 py-2 bg-accent-primary/10 text-accent-primary rounded-full mb-6 font-semibold border border-accent-primary/20">
           <Flame size={18} fill="currentColor" />
-          <span>0 DAY STREAK</span>
+          <span>{streak} DAY STREAK</span>
         </div>
         <h1 className="text-5xl md:text-7xl font-extrabold mb-6">
           Level Up Your <span className="gradient-text">Communication</span>
@@ -72,7 +78,7 @@ const LandingPage = () => {
         </div>
         
         <button 
-          onClick={() => navigate('/drill')}
+          onClick={() => navigate(`/drill?mode=general`)}
           className="btn btn-primary px-12 py-4 text-xl rounded-2xl"
         >
           <Play size={24} fill="white" />

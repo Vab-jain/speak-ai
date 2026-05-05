@@ -4,6 +4,7 @@ import { Settings, Home, BarChart2, Zap } from 'lucide-react';
 import { SettingsProvider } from './context/SettingsContext';
 import LandingPage from './pages/LandingPage';
 import SettingsPage from './pages/SettingsPage';
+import DrillPage from './pages/DrillPage';
 import { AnimatePresence } from 'framer-motion';
 
 const Navbar = () => {
@@ -48,7 +49,7 @@ const App = () => {
             <Route path="/" element={<LandingPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/progress" element={<div className="p-8 text-center mt-20"><BarChart2 size={48} className="mx-auto mb-4 text-text-muted" /><h2 className="text-2xl font-bold">Progress Dashboard</h2><p className="text-text-secondary">Coming soon in Issue #8</p></div>} />
-            <Route path="/drill" element={<div className="p-8 text-center mt-20"><Zap size={48} className="mx-auto mb-4 text-text-muted" /><h2 className="text-2xl font-bold">Active Drill</h2><p className="text-text-secondary">Starting session...</p></div>} />
+            <Route path="/drill" element={<DrillPage />} />
           </Routes>
           <Navbar />
         </div>

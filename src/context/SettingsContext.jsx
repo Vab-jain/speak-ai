@@ -10,6 +10,7 @@ export const SettingsProvider = ({ children }) => {
       technicalTopics: ['Machine Learning', 'System Design', 'Reinforcement Learning', 'RAG'],
       generalTopics: ['Leadership', 'Communication', 'Storytelling', 'Daily Routine'],
       durationPreference: 10,
+      fillerWords: ['um', 'uh', 'like', 'you know', 'basically', 'sort of', 'kind of', 'actually', 'literally', 'right', 'so', 'i mean'],
     };
   });
 
