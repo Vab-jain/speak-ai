@@ -45,6 +45,10 @@ const DrillPage = () => {
   const [currentDrillIndex, setCurrentDrillIndex] = useState(0);
   const [stage, setStage] = useState(STAGES.PREVIEW);
   const [completedDrills, setCompletedDrills] = useState([]);
+  
+  // Phase state for multi-phase drills like Level Explain
+  const [activePhase, setActivePhase] = useState(1);
+  const [phase1Data, setPhase1Data] = useState(null);
 
   // State for the current drill
   const [currentPrompt, setCurrentPrompt] = useState('');
@@ -124,34 +128,71 @@ const DrillPage = () => {
 
     // Evaluate metrics using the final transcript
     const fillerWords = settings.fillerWords; // Defined in SettingsContext defaults
-    const metrics = evaluateDrill(
-      finalTranscript, 
-      currentDrillPlan?.durationSeconds || 60,
-      fillerWords
-    );
+    const isLevelExplain = currentDrillPlan?.type === DRILL_TYPES.LEVEL_EXPLAIN;
+    const phaseDuration = isLevelExplain 
+      ? Math.floor((currentDrillPlan?.durationSeconds || 120) / 2)
+      : (currentDrillPlan?.durationSeconds || 60);
 
-    setCurrentMetrics(metrics);
+    const metrics = evaluateDrill(finalTranscript, phaseDuration, fillerWords);
 
-    // Save completed drill to state
-    setCompletedDrills(prev => [
-      ...prev,
-      {
+    if (isLevelExplain && activePhase === 1) {
+      setPhase1Data({
+        transcript: metrics.transcript,
+        metrics: { wpm: metrics.wpm, fillerCount: metrics.fillerCount },
+        detectedFillers: metrics.detectedFillers,
+        audioBlob
+      });
+      setActivePhase(2);
+      transcript.reset();
+      transcript.start();
+      await recorder.start();
+      timer.start(phaseDuration);
+      return; // Stay in ACTIVE stage
+    }
+
+    let finalDrillRecord;
+
+    if (isLevelExplain && activePhase === 2) {
+      // Combine Phase 1 and Phase 2 metrics for summary
+      const combinedWpm = Math.round((phase1Data.metrics.wpm + metrics.wpm) / 2);
+      const combinedFillerCount = phase1Data.metrics.fillerCount + metrics.fillerCount;
+      const combinedDetectedFillers = [...phase1Data.detectedFillers, ...metrics.detectedFillers];
+      
+      finalDrillRecord = {
+        id: currentDrillPlan.id,
+        type: currentDrillPlan.type,
+        mode: currentDrillPlan.mode,
+        prompt: currentPrompt,
+        transcript: null, 
+        transcript1: phase1Data.transcript,
+        transcript2: metrics.transcript,
+        metrics: { wpm: combinedWpm, fillerCount: combinedFillerCount },
+        detectedFillers: combinedDetectedFillers,
+        audioBlob1: phase1Data.audioBlob,
+        audioBlob2: audioBlob,
+      };
+      setCurrentMetrics({
+        wpm: combinedWpm,
+        fillerCount: combinedFillerCount,
+        detectedFillers: combinedDetectedFillers
+      });
+    } else {
+      finalDrillRecord = {
         id: currentDrillPlan.id,
         type: currentDrillPlan.type,
         mode: currentDrillPlan.mode,
         prompt: currentPrompt,
         transcript: metrics.transcript,
-        metrics: {
-          wpm: metrics.wpm,
-          fillerCount: metrics.fillerCount
-        },
+        metrics: { wpm: metrics.wpm, fillerCount: metrics.fillerCount },
         detectedFillers: metrics.detectedFillers,
-        audioBlob, // Keep reference for future use if needed
-      }
-    ]);
+        audioBlob,
+      };
+      setCurrentMetrics(metrics);
+    }
 
+    setCompletedDrills(prev => [...prev, finalDrillRecord]);
     setStage(STAGES.STATS);
-  }, [transcript, recorder, currentDrillPlan, currentPrompt, settings.fillerWords]);
+  }, [transcript, recorder, currentDrillPlan, currentPrompt, settings.fillerWords, activePhase, phase1Data, timer]);
 
   // Auto-transition when timer ends
   useEffect(() => {
@@ -166,10 +207,15 @@ const DrillPage = () => {
 
   const startDrill = async () => {
     setStage(STAGES.ACTIVE);
+    setActivePhase(1);
+    setPhase1Data(null);
     transcript.start();
     await recorder.start();
-    // Use the planned duration, default to 60 for OneMinuteSpeech
-    timer.start(currentDrillPlan?.durationSeconds || 60);
+    const isLevelExplain = currentDrillPlan?.type === DRILL_TYPES.LEVEL_EXPLAIN;
+    const duration = isLevelExplain 
+      ? Math.floor((currentDrillPlan?.durationSeconds || 120) / 2)
+      : (currentDrillPlan?.durationSeconds || 60);
+    timer.start(duration);
   };
 
 
@@ -270,11 +316,13 @@ const DrillPage = () => {
           >
             {(currentDrillPlan?.type === DRILL_TYPES.ONE_MINUTE_SPEECH || 
               currentDrillPlan?.type === DRILL_TYPES.SHADOW ||
+              currentDrillPlan?.type === DRILL_TYPES.LEVEL_EXPLAIN ||
               currentDrillPlan?.type === DRILL_TYPES.KEYWORDS) ? (
               <>
                 <span className="text-text-secondary uppercase tracking-widest font-semibold mb-4 text-sm">
                   {currentDrillPlan?.type === DRILL_TYPES.ONE_MINUTE_SPEECH ? 'Your Topic' : 
-                   currentDrillPlan?.type === DRILL_TYPES.SHADOW ? 'Shadow This' : 'Rapid-Fire Keywords'}
+                   currentDrillPlan?.type === DRILL_TYPES.SHADOW ? 'Shadow This' : 
+                   currentDrillPlan?.type === DRILL_TYPES.LEVEL_EXPLAIN ? 'Level Explain' : 'Rapid-Fire Keywords'}
                 </span>
                 <h1 className={`font-extrabold mb-12 leading-tight ${
                   (currentDrillPlan?.type === DRILL_TYPES.SHADOW || currentDrillPlan?.type === DRILL_TYPES.KEYWORDS)
@@ -288,6 +336,8 @@ const DrillPage = () => {
                     ? `Take a moment to gather your thoughts. You will speak for ${currentDrillPlan.durationSeconds} seconds about this topic.`
                     : currentDrillPlan?.type === DRILL_TYPES.SHADOW
                     ? `Read the text above, then speak it back naturally. You can repeat it exactly or paraphrase. You have ${currentDrillPlan.durationSeconds} seconds.`
+                    : currentDrillPlan?.type === DRILL_TYPES.LEVEL_EXPLAIN
+                    ? `You'll explain this concept twice. First to a high-school student (simple), then to an expert (technical). Each phase gets ${Math.floor((currentDrillPlan.durationSeconds || 120)/2)} seconds.`
                     : `Quickly list as many technical terms and keywords as possible related to the topic above. Accuracy and speed matter. You have ${currentDrillPlan.durationSeconds} seconds.`}
                 </p>
                 <button 
@@ -321,6 +371,11 @@ const DrillPage = () => {
                 Speaking About
               </span>
               <h2 className="text-3xl font-bold">{currentPrompt}</h2>
+              {currentDrillPlan?.type === DRILL_TYPES.LEVEL_EXPLAIN && (
+                <div className="mt-6 text-xl font-bold text-accent-primary bg-accent-primary/10 inline-block px-6 py-3 rounded-xl border border-accent-primary/20">
+                  Phase {activePhase}: Explain to {activePhase === 1 ? 'a High-School Student' : 'an Expert'}
+                </div>
+              )}
             </div>
 
             <DrillTimer 

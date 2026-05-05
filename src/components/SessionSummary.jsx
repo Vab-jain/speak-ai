@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Save, ChevronDown, ChevronUp } from 'lucide-react';
-import { generateFeedback } from '../utils/groqClient';
+import { generateFeedback, generateLevelExplainFeedback } from '../utils/groqClient';
+import { DRILL_TYPES } from '../utils/sessionEngine';
 
 const DrillAccordion = ({ drill, index }) => {
   const [isOpen, setIsOpen] = useState(index === 0);
@@ -9,11 +10,19 @@ const DrillAccordion = ({ drill, index }) => {
   const [isLoadingFeedback, setIsLoadingFeedback] = useState(false);
 
   useEffect(() => {
-    if (isOpen && !feedback && drill.transcript) {
+    const isLevelExplain = drill.type === DRILL_TYPES.LEVEL_EXPLAIN;
+    const hasContent = isLevelExplain ? (drill.transcript1 && drill.transcript2) : drill.transcript;
+
+    if (isOpen && !feedback && hasContent) {
       const fetchFeedback = async () => {
         setIsLoadingFeedback(true);
         try {
-          const res = await generateFeedback(drill.transcript, drill.prompt);
+          let res;
+          if (isLevelExplain) {
+            res = await generateLevelExplainFeedback(drill.transcript1, drill.transcript2, drill.prompt);
+          } else {
+            res = await generateFeedback(drill.transcript, drill.prompt);
+          }
           setFeedback(res);
         } catch (err) {
           setFeedback("Unable to generate feedback.");
@@ -24,7 +33,7 @@ const DrillAccordion = ({ drill, index }) => {
       };
       fetchFeedback();
     }
-  }, [isOpen, feedback, drill.transcript, drill.prompt]);
+  }, [isOpen, feedback, drill]);
 
   return (
     <div className="border border-border rounded-xl overflow-hidden mb-4 bg-white/5">
@@ -52,16 +61,34 @@ const DrillAccordion = ({ drill, index }) => {
       
       {isOpen && (
         <div className="p-4 border-t border-border">
-          <div className="text-sm text-text-secondary leading-relaxed bg-black/20 p-4 rounded-lg mb-4">
-            {drill.transcript || <span className="italic opacity-50">No transcript recorded.</span>}
-          </div>
-          {drill.transcript && (
+          {drill.type === DRILL_TYPES.LEVEL_EXPLAIN ? (
+            <div className="flex flex-col gap-4 mb-4">
+              <div className="bg-black/20 p-4 rounded-lg">
+                <h4 className="text-xs font-bold text-text-muted uppercase mb-2">Phase 1: High-Schooler</h4>
+                <div className="text-sm text-text-secondary leading-relaxed">
+                  {drill.transcript1 || <span className="italic opacity-50">No transcript recorded.</span>}
+                </div>
+              </div>
+              <div className="bg-black/20 p-4 rounded-lg">
+                <h4 className="text-xs font-bold text-text-muted uppercase mb-2">Phase 2: Expert</h4>
+                <div className="text-sm text-text-secondary leading-relaxed">
+                  {drill.transcript2 || <span className="italic opacity-50">No transcript recorded.</span>}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-sm text-text-secondary leading-relaxed bg-black/20 p-4 rounded-lg mb-4">
+              {drill.transcript || <span className="italic opacity-50">No transcript recorded.</span>}
+            </div>
+          )}
+          
+          {(drill.transcript || (drill.transcript1 && drill.transcript2)) && (
             <div className="bg-accent-primary/10 p-4 rounded-lg border border-accent-primary/20">
               <h4 className="text-xs font-bold text-accent-primary uppercase tracking-wider mb-2">AI Coach Feedback</h4>
               {isLoadingFeedback ? (
                 <div className="text-sm text-text-secondary animate-pulse">Analyzing your speech...</div>
               ) : (
-                <p className="text-sm text-text-primary">{feedback}</p>
+                <p className="text-sm text-text-primary whitespace-pre-wrap">{feedback}</p>
               )}
             </div>
           )}

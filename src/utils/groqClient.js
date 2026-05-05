@@ -137,3 +137,54 @@ Do not mention filler words if there are any, as those are tracked separately. D
     return "Unable to generate feedback at this time. Keep practicing!";
   }
 }
+
+/**
+ * Generate qualitative feedback using Groq LLM for the Level Explain drill.
+ * @param {string} transcript1 Phase 1 transcript (High-Schooler)
+ * @param {string} transcript2 Phase 2 transcript (Expert)
+ * @param {string} prompt The original drill prompt (concept to explain)
+ * @returns {Promise<string>}
+ */
+export async function generateLevelExplainFeedback(transcript1, transcript2, prompt) {
+  if (!transcript1 || !transcript2) {
+    return "Both phases must have transcripts to provide comparison feedback.";
+  }
+
+  const systemPrompt = `You are an expert communication coach reviewing a student's performance in a "Level Explain" drill.
+The student was asked to explain this concept: "${prompt}".
+First, they explained it to a high-school student: "${transcript1}"
+Next, they explained it to an expert: "${transcript2}"
+
+Provide brief, encouraging, and constructive qualitative feedback (3-4 short sentences max).
+Focus heavily on:
+- How well they adapted their vocabulary and complexity between the two levels.
+- Was the high-school version clear and accessible without being condescending?
+- Was the expert version appropriately technical, precise, and dense?
+Do not mention filler words if there are any, as those are tracked separately. Do not include introductory phrases like "Here is your feedback" or "As a coach". Just provide the feedback directly.`;
+
+  try {
+    const response = await fetch(GROQ_CHAT_URL, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${GROQ_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        messages: [{ role: "system", content: systemPrompt }],
+        temperature: 0.5,
+        max_tokens: 200,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Groq API Error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content.trim();
+  } catch (error) {
+    console.error("Error generating Level Explain feedback with Groq:", error);
+    return "Unable to generate comparison feedback at this time. Keep practicing!";
+  }
+}
