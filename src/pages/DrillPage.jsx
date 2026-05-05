@@ -3,8 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { useSettings } from '../context/SettingsContext';
-import { generateSession } from '../utils/sessionEngine';
-import { generateOneMinuteSpeechPrompt } from '../utils/promptGenerator';
+import { generateSession, swapDrill, removeDrill, DRILL_TYPES } from '../utils/sessionEngine';
+import { generatePrompt } from '../utils/promptGenerator';
 import { evaluateDrill } from '../utils/evaluationEngine';
 import { saveSession } from '../utils/progressStore';
 
@@ -16,6 +16,9 @@ import DrillTimer from '../components/DrillTimer';
 import LiveTranscriptBox from '../components/LiveTranscriptBox';
 import MiniStatsCard from '../components/MiniStatsCard';
 import SessionSummary from '../components/SessionSummary';
+import SessionPreview from '../components/SessionPreview';
+import DrillPlaceholder from '../components/DrillPlaceholder';
+import { XCircle, ChevronRight } from 'lucide-react';
 
 // Helper to parse query params
 function useQuery() {
@@ -23,6 +26,7 @@ function useQuery() {
 }
 
 const STAGES = {
+  PREVIEW: 'PREVIEW',
   PROMPT: 'PROMPT',
   ACTIVE: 'ACTIVE',
   STATS: 'STATS',
@@ -38,7 +42,7 @@ const DrillPage = () => {
   
   const [sessionPlan, setSessionPlan] = useState([]);
   const [currentDrillIndex, setCurrentDrillIndex] = useState(0);
-  const [stage, setStage] = useState(STAGES.PROMPT);
+  const [stage, setStage] = useState(STAGES.PREVIEW);
   const [completedDrills, setCompletedDrills] = useState([]);
 
   // State for the current drill
@@ -54,18 +58,53 @@ const DrillPage = () => {
   useEffect(() => {
     const duration = settings.durationPreference || 10;
     const plan = generateSession(duration, queryMode);
-    setSessionPlan(plan);
-    // Initialize first prompt
-    loadPromptForDrill(plan[0], queryMode);
+    
+    // Generate prompts for all drills initially for the preview
+    const planWithPrompts = plan.map(drill => ({
+      ...drill,
+      prompt: generatePrompt(
+        drill.type, 
+        queryMode, 
+        queryMode === 'technical' ? settings.technicalTopics : settings.generalTopics
+      )
+    }));
+
+    setSessionPlan(planWithPrompts);
   }, []);
 
-  const loadPromptForDrill = (drillPlan, mode) => {
-    const topics = mode === 'technical' ? settings.technicalTopics : settings.generalTopics;
-    const prompt = generateOneMinuteSpeechPrompt(mode, topics);
-    setCurrentPrompt(prompt);
+  const handleSwap = (drillId) => {
+    const newPlan = swapDrill(sessionPlan, drillId, queryMode);
+    // Regenerate prompt for the swapped drill
+    const updatedPlan = newPlan.map(d => {
+      if (d.id === drillId) {
+        return {
+          ...d,
+          prompt: generatePrompt(
+            d.type, 
+            queryMode, 
+            queryMode === 'technical' ? settings.technicalTopics : settings.generalTopics
+          )
+        };
+      }
+      return d;
+    });
+    setSessionPlan(updatedPlan);
+  };
+
+  const handleRemove = (drillId) => {
+    setSessionPlan(removeDrill(sessionPlan, drillId));
+  };
+
+  const startSession = () => {
+    if (sessionPlan.length > 0) {
+      setCurrentDrillIndex(0);
+      setCurrentPrompt(sessionPlan[0].prompt);
+      setStage(STAGES.PROMPT);
+    }
   };
 
   const currentDrillPlan = sessionPlan[currentDrillIndex];
+
 
   // Auto-transition when timer ends
   useEffect(() => {
@@ -122,7 +161,7 @@ const DrillPage = () => {
     if (nextIndex < sessionPlan.length) {
       // Setup next drill
       setCurrentDrillIndex(nextIndex);
-      loadPromptForDrill(sessionPlan[nextIndex], queryMode);
+      setCurrentPrompt(sessionPlan[nextIndex].prompt);
       
       // Reset state for new drill
       timer.reset();
@@ -134,6 +173,15 @@ const DrillPage = () => {
       setStage(STAGES.SUMMARY);
     }
   };
+
+  const endSessionEarly = () => {
+    if (completedDrills.length > 0) {
+      setStage(STAGES.SUMMARY);
+    } else {
+      navigate('/');
+    }
+  };
+
 
   const finishSession = (sessionDataWithRating) => {
     saveSession({
@@ -154,20 +202,45 @@ const DrillPage = () => {
   return (
     <div className="max-w-4xl mx-auto px-6 pt-12 flex flex-col items-center">
       
-      {/* Header (hidden in summary) */}
-      {stage !== STAGES.SUMMARY && (
-        <div className="w-full flex justify-between items-center mb-12">
-          <div className="text-sm font-semibold text-text-muted uppercase tracking-wider">
-            {queryMode} Mode
+      {/* Header (hidden in summary and preview) */}
+      {stage !== STAGES.SUMMARY && stage !== STAGES.PREVIEW && (
+        <div className="w-full flex justify-between items-center mb-8">
+          <div className="flex flex-col">
+            <div className="text-sm font-semibold text-text-muted uppercase tracking-wider flex items-center gap-2">
+              {queryMode} Mode
+              <ChevronRight size={14} />
+              <span className="text-accent-primary">{currentDrillPlan?.label}</span>
+            </div>
           </div>
-          <div className="text-sm font-semibold text-accent-primary uppercase tracking-wider bg-accent-primary/10 px-3 py-1 rounded-full">
-            Drill {currentDrillIndex + 1} of {sessionPlan.length}
+          <div className="flex items-center gap-4">
+            <div className="text-sm font-semibold text-accent-primary uppercase tracking-wider bg-accent-primary/10 px-3 py-1 rounded-full">
+              Drill {currentDrillIndex + 1} of {sessionPlan.length}
+            </div>
+            <button 
+              onClick={endSessionEarly}
+              className="p-2 text-text-muted hover:text-danger hover:bg-danger/10 rounded-lg transition-colors"
+              title="End Session Early"
+            >
+              <XCircle size={20} />
+            </button>
           </div>
         </div>
       )}
 
       <AnimatePresence mode="wait">
         
+        {/* STAGE: PREVIEW */}
+        {stage === STAGES.PREVIEW && (
+          <motion.div key="preview" className="w-full">
+            <SessionPreview 
+              drills={sessionPlan} 
+              onStart={startSession}
+              onSwap={handleSwap}
+              onRemove={handleRemove}
+            />
+          </motion.div>
+        )}
+
         {/* STAGE: PROMPT */}
         {stage === STAGES.PROMPT && (
           <motion.div 
@@ -175,25 +248,35 @@ const DrillPage = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="flex flex-col items-center text-center w-full mt-10"
+            className="flex flex-col items-center text-center w-full mt-4"
           >
-            <span className="text-text-secondary uppercase tracking-widest font-semibold mb-4 text-sm">
-              Your Topic
-            </span>
-            <h1 className="text-5xl md:text-6xl font-extrabold mb-12 leading-tight">
-              {currentPrompt}
-            </h1>
-            <p className="text-text-secondary mb-12 max-w-lg">
-              Take a moment to gather your thoughts. You will speak for {currentDrillPlan.durationSeconds} seconds about this topic.
-            </p>
-            <button 
-              onClick={startDrill}
-              className="btn btn-primary px-12 py-5 text-xl shadow-[0_0_30px_rgba(139,92,246,0.3)] hover:shadow-[0_0_40px_rgba(139,92,246,0.5)] transition-all"
-            >
-              Start Speaking
-            </button>
+            {currentDrillPlan?.type === DRILL_TYPES.ONE_MINUTE_SPEECH ? (
+              <>
+                <span className="text-text-secondary uppercase tracking-widest font-semibold mb-4 text-sm">
+                  Your Topic
+                </span>
+                <h1 className="text-5xl md:text-6xl font-extrabold mb-12 leading-tight">
+                  {currentPrompt}
+                </h1>
+                <p className="text-text-secondary mb-12 max-w-lg">
+                  Take a moment to gather your thoughts. You will speak for {currentDrillPlan.durationSeconds} seconds about this topic.
+                </p>
+                <button 
+                  onClick={startDrill}
+                  className="btn btn-primary px-12 py-5 text-xl shadow-[0_0_30px_rgba(139,92,246,0.3)] hover:shadow-[0_0_40px_rgba(139,92,246,0.5)] transition-all"
+                >
+                  Start Speaking
+                </button>
+              </>
+            ) : (
+              <DrillPlaceholder 
+                drillType={currentDrillPlan?.label} 
+                onSwap={() => handleSwap(currentDrillPlan.id)} 
+              />
+            )}
           </motion.div>
         )}
+
 
         {/* STAGE: ACTIVE */}
         {stage === STAGES.ACTIVE && (
