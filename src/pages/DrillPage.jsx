@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -109,23 +109,7 @@ const DrillPage = () => {
 
   const currentDrillPlan = sessionPlan[currentDrillIndex];
 
-
-  // Auto-transition when timer ends
-  useEffect(() => {
-    if (stage === STAGES.ACTIVE && !timer.isRunning && timer.timeLeft === 0) {
-      handleDrillComplete();
-    }
-  }, [timer.isRunning, timer.timeLeft, stage]);
-
-  const startDrill = async () => {
-    setStage(STAGES.ACTIVE);
-    transcript.start();
-    await recorder.start();
-    // Use the planned duration, default to 60 for OneMinuteSpeech
-    timer.start(currentDrillPlan?.durationSeconds || 60);
-  };
-
-  const handleDrillComplete = async () => {
+  const handleDrillComplete = useCallback(async () => {
     transcript.stop();
     const audioBlob = await recorder.stop(); // We capture this even if we don't upload it yet
     
@@ -167,7 +151,28 @@ const DrillPage = () => {
     ]);
 
     setStage(STAGES.STATS);
+  }, [transcript, recorder, currentDrillPlan, currentPrompt, settings.fillerWords]);
+
+  // Auto-transition when timer ends
+  useEffect(() => {
+    if (stage === STAGES.ACTIVE && !timer.isRunning && timer.timeLeft === 0) {
+      // Defer to next tick to avoid React warning about setState in effect body
+      const timeout = setTimeout(() => {
+        handleDrillComplete();
+      }, 0);
+      return () => clearTimeout(timeout);
+    }
+  }, [timer.isRunning, timer.timeLeft, stage, handleDrillComplete]);
+
+  const startDrill = async () => {
+    setStage(STAGES.ACTIVE);
+    transcript.start();
+    await recorder.start();
+    // Use the planned duration, default to 60 for OneMinuteSpeech
+    timer.start(currentDrillPlan?.durationSeconds || 60);
   };
+
+
 
   const nextDrill = () => {
     const nextIndex = currentDrillIndex + 1;
@@ -263,13 +268,16 @@ const DrillPage = () => {
             exit={{ opacity: 0, y: -20 }}
             className="flex flex-col items-center text-center w-full mt-4"
           >
-            {(currentDrillPlan?.type === DRILL_TYPES.ONE_MINUTE_SPEECH || currentDrillPlan?.type === DRILL_TYPES.SHADOW) ? (
+            {(currentDrillPlan?.type === DRILL_TYPES.ONE_MINUTE_SPEECH || 
+              currentDrillPlan?.type === DRILL_TYPES.SHADOW ||
+              currentDrillPlan?.type === DRILL_TYPES.KEYWORDS) ? (
               <>
                 <span className="text-text-secondary uppercase tracking-widest font-semibold mb-4 text-sm">
-                  {currentDrillPlan?.type === DRILL_TYPES.ONE_MINUTE_SPEECH ? 'Your Topic' : 'Shadow This'}
+                  {currentDrillPlan?.type === DRILL_TYPES.ONE_MINUTE_SPEECH ? 'Your Topic' : 
+                   currentDrillPlan?.type === DRILL_TYPES.SHADOW ? 'Shadow This' : 'Rapid-Fire Keywords'}
                 </span>
                 <h1 className={`font-extrabold mb-12 leading-tight ${
-                  currentDrillPlan?.type === DRILL_TYPES.SHADOW 
+                  (currentDrillPlan?.type === DRILL_TYPES.SHADOW || currentDrillPlan?.type === DRILL_TYPES.KEYWORDS)
                     ? 'text-3xl md:text-4xl text-left bg-white/5 p-8 rounded-2xl border border-white/10' 
                     : 'text-5xl md:text-6xl text-center'
                 }`}>
@@ -278,7 +286,9 @@ const DrillPage = () => {
                 <p className="text-text-secondary mb-12 max-w-lg">
                   {currentDrillPlan?.type === DRILL_TYPES.ONE_MINUTE_SPEECH 
                     ? `Take a moment to gather your thoughts. You will speak for ${currentDrillPlan.durationSeconds} seconds about this topic.`
-                    : `Read the text above, then speak it back naturally. You can repeat it exactly or paraphrase. You have ${currentDrillPlan.durationSeconds} seconds.`}
+                    : currentDrillPlan?.type === DRILL_TYPES.SHADOW
+                    ? `Read the text above, then speak it back naturally. You can repeat it exactly or paraphrase. You have ${currentDrillPlan.durationSeconds} seconds.`
+                    : `Quickly list as many technical terms and keywords as possible related to the topic above. Accuracy and speed matter. You have ${currentDrillPlan.durationSeconds} seconds.`}
                 </p>
                 <button 
                   onClick={startDrill}

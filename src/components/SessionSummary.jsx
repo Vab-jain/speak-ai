@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Save, ChevronDown, ChevronUp } from 'lucide-react';
 import { generateFeedback } from '../utils/groqClient';
@@ -15,8 +15,9 @@ const DrillAccordion = ({ drill, index }) => {
         try {
           const res = await generateFeedback(drill.transcript, drill.prompt);
           setFeedback(res);
-        } catch (error) {
+        } catch (err) {
           setFeedback("Unable to generate feedback.");
+          console.error(err);
         } finally {
           setIsLoadingFeedback(false);
         }

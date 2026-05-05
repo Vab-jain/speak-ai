@@ -24,7 +24,7 @@ Rules:
 2. Keep it concise and actionable.
 3. If type is ONE_MINUTE_SPEECH, it should be a broad question or statement to discuss.
 4. If type is SHADOW, provide a rich, speakable sentence or a short paragraph (2-3 sentences) to repeat or paraphrase.
-5. If type is KEYWORDS, ask them to list keywords for a specific topic.
+5. If type is KEYWORDS, provide a specific technical topic (e.g., "RAG" or "Microservices") and ask them to list as many relevant keywords as possible.
 6. If type is LEVEL_EXPLAIN, ask them to explain a specific topic at two difficulty levels.
 7. If type is FILLER_RESET, ask them to explain a topic without using fillers.`;
 
@@ -108,6 +108,7 @@ Focus on:
 - Relevance to the prompt.
 - Use of vocabulary.
 ${prompt.toLowerCase().includes('shadow') ? '- Delivery fluency and paraphrasing quality (if they paraphrased instead of repeating exactly).' : ''}
+${prompt.toLowerCase().includes('keyword') ? '- Keyword coverage (how many relevant terms did they hit?) and suggest 3-4 key technical terms they missed.' : ''}
 Do not mention filler words if there are any, as those are tracked separately. Do not include introductory phrases like "Here is your feedback" or "As a coach". Just provide the feedback directly.`;
 
   try {

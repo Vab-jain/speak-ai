@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Mic } from 'lucide-react';
 
 const LiveTranscriptBox = ({ transcript, isListening }) => {

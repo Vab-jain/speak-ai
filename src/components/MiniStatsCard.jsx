@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { Play, Check, Activity, AlertTriangle } from 'lucide-react';
 import { motion } from 'framer-motion';
 

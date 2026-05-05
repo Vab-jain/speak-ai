@@ -1,6 +1,6 @@
-import React from 'react';
+
 import { motion } from 'framer-motion';
-import { Construction, ArrowRight, RotateCcw } from 'lucide-react';
+import { Construction, RotateCcw } from 'lucide-react';
 
 const DrillPlaceholder = ({ drillType, onSwap }) => {
   return (

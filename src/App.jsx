@@ -1,11 +1,10 @@
-import React from 'react';
+
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Settings, Home, BarChart2, Zap } from 'lucide-react';
+import { Settings, Home, BarChart2 } from 'lucide-react';
 import { SettingsProvider } from './context/SettingsContext';
 import LandingPage from './pages/LandingPage';
 import SettingsPage from './pages/SettingsPage';
 import DrillPage from './pages/DrillPage';
-import { AnimatePresence } from 'framer-motion';
 
 const Navbar = () => {
   const location = useLocation();

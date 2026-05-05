@@ -1,6 +1,6 @@
-import React from 'react';
+
 import { motion } from 'framer-motion';
-import { Play, RotateCcw, Trash2, Clock, Zap } from 'lucide-react';
+import { Play, RotateCcw, Trash2, Clock } from 'lucide-react';
 
 const SessionPreview = ({ drills, onStart, onSwap, onRemove }) => {
   return (

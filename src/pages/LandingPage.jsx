@@ -1,4 +1,4 @@
-import React from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Play, Flame, Clock, Cpu, MessageSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -8,10 +8,12 @@ import { getStreak } from '../utils/progressStore';
 const LandingPage = () => {
   const navigate = useNavigate();
   const { settings, updateSettings } = useSettings();
-  const [streak, setStreak] = React.useState(0);
+  const [streak] = useState(() => getStreak());
 
-  React.useEffect(() => {
-    setStreak(getStreak());
+  useEffect(() => {
+    // Already initialized in useState, but we can keep this for future updates if needed
+    // or remove it if streak only changes on session completion.
+    // For now, let's just use the initializer.
   }, []);
 
   return (

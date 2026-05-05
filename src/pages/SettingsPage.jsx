@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, Plus, X, Save, Key, Cpu, MessageSquare } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
