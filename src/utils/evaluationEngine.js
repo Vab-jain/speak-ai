@@ -79,3 +79,29 @@ export function evaluateDrill(transcript, durationSeconds, fillerList = DEFAULT_
   const { count: fillerCount, detected: detectedFillers } = countFillers(transcript, fillerList);
   return { wpm, fillerCount, detectedFillers, transcript };
 }
+
+/**
+ * Extracts and counts matching keywords from a transcript based on a target list.
+ *
+ * @param {string} transcript
+ * @param {string[]} targetKeywords
+ * @returns {{ count: number, matched: string[] }}
+ */
+export function extractKeywords(transcript, targetKeywords) {
+  if (!transcript || !transcript.trim() || !targetKeywords || !targetKeywords.length) {
+    return { count: 0, matched: [] };
+  }
+
+  const lower = transcript.toLowerCase();
+  const matched = [];
+
+  for (const kw of targetKeywords) {
+    const escaped = kw.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const pattern = new RegExp(`\\b${escaped}\\b`, 'gi');
+    if (pattern.test(lower)) {
+      matched.push(kw);
+    }
+  }
+
+  return { count: matched.length, matched };
+}

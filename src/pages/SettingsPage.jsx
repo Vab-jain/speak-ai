@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Eye, EyeOff, Plus, X, Save, Key, Cpu, MessageSquare } from 'lucide-react';
+import { Eye, EyeOff, Plus, X, Save, Key, Cpu, MessageSquare, Download, Upload, Database } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 
 const TopicManager = ({ title, topics, onAdd, onRemove, icon: Icon, color }) => {
@@ -57,13 +57,58 @@ const TopicManager = ({ title, topics, onAdd, onRemove, icon: Icon, color }) => 
 };
 
 const SettingsPage = () => {
-  const { settings, updateSettings } = useSettings();
+  const { settings, updateSettings, overwriteSettings } = useSettings();
   const [showApiKey, setShowApiKey] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const fileInputRef = useRef(null);
 
   const handleSave = () => {
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 2000);
+  };
+
+  const handleExport = () => {
+    const data = {
+      speakup_settings: JSON.parse(localStorage.getItem('speakup_settings') || '{}'),
+      speakup_progress: JSON.parse(localStorage.getItem('speakup_progress') || '{}')
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `speakup-data-${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!window.confirm("Warning: This will overwrite your current settings and progress data. Continue?")) {
+      e.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target.result);
+        if (data.speakup_progress) {
+          localStorage.setItem('speakup_progress', JSON.stringify(data.speakup_progress));
+        }
+        if (data.speakup_settings) {
+          overwriteSettings(data.speakup_settings);
+        }
+        alert("Data imported successfully! The page will now reload.");
+        window.location.reload();
+      } catch (err) {
+        alert("Invalid JSON file. Import failed.");
+        console.error("Import error:", err);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   };
 
   return (
@@ -133,6 +178,42 @@ const SettingsPage = () => {
         onAdd={(topic) => updateSettings({ generalTopics: [...settings.generalTopics, topic] })}
         onRemove={(topic) => updateSettings({ generalTopics: settings.generalTopics.filter(t => t !== topic) })}
       />
+
+      <section className="glass-card mb-8">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 bg-success/10 text-success rounded-lg">
+            <Database size={20} />
+          </div>
+          <h3 className="text-xl font-bold">Data Management</h3>
+        </div>
+        
+        <div className="flex flex-col gap-4 text-sm text-text-secondary">
+          <p>Export your sessions, settings, and progress to a JSON file for backup, or import a previously saved file.</p>
+          <div className="flex flex-wrap gap-4 mt-2">
+            <button 
+              onClick={handleExport}
+              className="btn bg-white/5 border border-white/10 hover:border-white/20 text-text-primary px-6 py-3"
+            >
+              <Download size={18} />
+              Export Data
+            </button>
+            <input 
+              type="file" 
+              accept=".json" 
+              ref={fileInputRef} 
+              onChange={handleImport} 
+              className="hidden" 
+            />
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              className="btn bg-white/5 border border-white/10 hover:border-white/20 text-text-primary px-6 py-3"
+            >
+              <Upload size={18} />
+              Import Data
+            </button>
+          </div>
+        </div>
+      </section>
 
       <div className="flex justify-end">
         <button onClick={handleSave} className="btn btn-primary px-8">

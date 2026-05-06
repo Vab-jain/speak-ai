@@ -40,12 +40,17 @@ export function generateSession(durationMinutes, mode) {
   // Drill counts per session duration
   const drillCount = durationMinutes >= 15 ? 5 : 3;
   const types = Object.values(DRILL_TYPES);
+  
+  // Shuffle types to avoid repeats
+  for (let i = types.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [types[i], types[j]] = [types[j], types[i]];
+  }
 
   const drills = [];
-  for (let i = 0; i < drillCount; i++) {
-    // Pick a random type from all available types
-    const type = types[Math.floor(Math.random() * types.length)];
-    drills.push(createDrill(type, mode));
+  const limit = Math.min(drillCount, types.length);
+  for (let i = 0; i < limit; i++) {
+    drills.push(createDrill(types[i], mode));
   }
 
   return drills;

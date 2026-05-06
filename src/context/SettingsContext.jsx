@@ -22,8 +22,12 @@ export const SettingsProvider = ({ children }) => {
     setSettings(prev => ({ ...prev, ...newSettings }));
   };
 
+  const overwriteSettings = (newSettings) => {
+    setSettings(newSettings);
+  };
+
   return (
-    <SettingsContext.Provider value={{ settings, updateSettings }}>
+    <SettingsContext.Provider value={{ settings, updateSettings, overwriteSettings }}>
       {children}
     </SettingsContext.Provider>
   );
