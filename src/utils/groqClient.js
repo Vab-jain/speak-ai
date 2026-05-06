@@ -188,3 +188,52 @@ Do not mention filler words if there are any, as those are tracked separately. D
     return "Unable to generate comparison feedback at this time. Keep practicing!";
   }
 }
+
+/**
+ * Generate qualitative feedback using Groq LLM for the Filler Reset drill.
+ * @param {string} transcript The user's speech transcript
+ * @param {number} resetCount Number of times the timer was reset
+ * @param {string} difficulty 'easy' or 'hard'
+ * @param {number} targetDuration Target duration in seconds
+ * @returns {Promise<string>}
+ */
+export async function generateFillerResetFeedback(transcript, resetCount, difficulty, targetDuration) {
+  const systemPrompt = `You are an expert communication coach reviewing a student's performance in a "Filler Reset" drill.
+The student had to speak without using filler words for ${targetDuration} seconds.
+Mode: ${difficulty} (In easy mode they self-monitored; in hard mode AI auto-detected).
+They reset the timer ${resetCount} times.
+Here is their final transcript: "${transcript || '(No transcript available)'}"
+
+Provide brief, encouraging, and constructive qualitative feedback (3-4 short sentences max).
+Focus on:
+- Commending their effort, especially if they achieved the target duration with few resets.
+- If they had many resets, encourage them to slow down their speaking pace and embrace silence instead of fillers.
+- Observe any patterns in their final transcript if available.
+Do not include introductory phrases like "Here is your feedback" or "As a coach". Just provide the feedback directly.`;
+
+  try {
+    const response = await fetch(GROQ_CHAT_URL, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${GROQ_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        messages: [{ role: "system", content: systemPrompt }],
+        temperature: 0.5,
+        max_tokens: 150,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Groq API Error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content.trim();
+  } catch (error) {
+    console.error("Error generating Filler Reset feedback with Groq:", error);
+    return "Unable to generate feedback at this time. Keep practicing!";
+  }
+}

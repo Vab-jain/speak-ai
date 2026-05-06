@@ -5,11 +5,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useSettings } from '../context/SettingsContext';
 import { generateSession, swapDrill, removeDrill, DRILL_TYPES } from '../utils/sessionEngine';
 import { generatePrompt } from '../utils/promptGenerator';
-import { evaluateDrill } from '../utils/evaluationEngine';
+import { evaluateDrill, countFillers } from '../utils/evaluationEngine';
 import { saveSession } from '../utils/progressStore';
 import { transcribeAudio } from '../utils/groqClient';
 
 import { useDrillTimer } from '../hooks/useDrillTimer';
+import { useCountUpTimer } from '../hooks/useCountUpTimer';
 import { useLiveTranscript } from '../hooks/useLiveTranscript';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
 
@@ -50,12 +51,19 @@ const DrillPage = () => {
   const [activePhase, setActivePhase] = useState(1);
   const [phase1Data, setPhase1Data] = useState(null);
 
+  // State for Filler Reset drill
+  const [fillerDifficulty, setFillerDifficulty] = useState('easy');
+  const [fillerDuration, setFillerDuration] = useState(60);
+  const [resetCount, setResetCount] = useState(0);
+  const [isFlash, setIsFlash] = useState(false);
+
   // State for the current drill
   const [currentPrompt, setCurrentPrompt] = useState('');
   const [currentMetrics, setCurrentMetrics] = useState(null);
 
   // Hooks
   const timer = useDrillTimer();
+  const countUpTimer = useCountUpTimer();
   const transcript = useLiveTranscript();
   const recorder = useAudioRecorder();
 
@@ -129,9 +137,10 @@ const DrillPage = () => {
     // Evaluate metrics using the final transcript
     const fillerWords = settings.fillerWords; // Defined in SettingsContext defaults
     const isLevelExplain = currentDrillPlan?.type === DRILL_TYPES.LEVEL_EXPLAIN;
+    const isFillerReset = currentDrillPlan?.type === DRILL_TYPES.FILLER_RESET;
     const phaseDuration = isLevelExplain 
       ? Math.floor((currentDrillPlan?.durationSeconds || 120) / 2)
-      : (currentDrillPlan?.durationSeconds || 60);
+      : isFillerReset ? fillerDuration : (currentDrillPlan?.durationSeconds || 60);
 
     const metrics = evaluateDrill(finalTranscript, phaseDuration, fillerWords);
 
@@ -186,6 +195,7 @@ const DrillPage = () => {
         metrics: { wpm: metrics.wpm, fillerCount: metrics.fillerCount },
         detectedFillers: metrics.detectedFillers,
         audioBlob,
+        ...(isFillerReset && { resetCount, fillerDifficulty, targetDuration: fillerDuration })
       };
       setCurrentMetrics(metrics);
     }
@@ -196,26 +206,58 @@ const DrillPage = () => {
 
   // Auto-transition when timer ends
   useEffect(() => {
-    if (stage === STAGES.ACTIVE && !timer.isRunning && timer.timeLeft === 0) {
-      // Defer to next tick to avoid React warning about setState in effect body
-      const timeout = setTimeout(() => {
-        handleDrillComplete();
-      }, 0);
-      return () => clearTimeout(timeout);
+    if (stage === STAGES.ACTIVE) {
+      if (currentDrillPlan?.type === DRILL_TYPES.FILLER_RESET) {
+        if (!countUpTimer.isRunning && countUpTimer.timeElapsed >= fillerDuration) {
+          const timeout = setTimeout(() => handleDrillComplete(), 0);
+          return () => clearTimeout(timeout);
+        }
+      } else {
+        if (!timer.isRunning && timer.timeLeft === 0) {
+          const timeout = setTimeout(() => handleDrillComplete(), 0);
+          return () => clearTimeout(timeout);
+        }
+      }
     }
-  }, [timer.isRunning, timer.timeLeft, stage, handleDrillComplete]);
+  }, [timer.isRunning, timer.timeLeft, countUpTimer.isRunning, countUpTimer.timeElapsed, stage, currentDrillPlan, fillerDuration, handleDrillComplete]);
+
+  // Hard mode auto-reset for FILLER_RESET
+  useEffect(() => {
+    if (
+      stage === STAGES.ACTIVE &&
+      currentDrillPlan?.type === DRILL_TYPES.FILLER_RESET &&
+      fillerDifficulty === 'hard' &&
+      transcript.transcript
+    ) {
+      const { count } = countFillers(transcript.transcript, settings.fillerWords);
+      if (count > 0) {
+        setResetCount(prev => prev + 1);
+        setIsFlash(true);
+        setTimeout(() => setIsFlash(false), 500);
+        transcript.reset();
+        countUpTimer.reset();
+        // timer continues running
+      }
+    }
+  }, [transcript.transcript, stage, currentDrillPlan, fillerDifficulty, settings.fillerWords, countUpTimer, transcript]);
 
   const startDrill = async () => {
     setStage(STAGES.ACTIVE);
     setActivePhase(1);
     setPhase1Data(null);
+    setResetCount(0);
     transcript.start();
     await recorder.start();
-    const isLevelExplain = currentDrillPlan?.type === DRILL_TYPES.LEVEL_EXPLAIN;
-    const duration = isLevelExplain 
-      ? Math.floor((currentDrillPlan?.durationSeconds || 120) / 2)
-      : (currentDrillPlan?.durationSeconds || 60);
-    timer.start(duration);
+    
+    if (currentDrillPlan?.type === DRILL_TYPES.FILLER_RESET) {
+      countUpTimer.start(fillerDuration);
+    } else {
+      const isLevelExplain = currentDrillPlan?.type === DRILL_TYPES.LEVEL_EXPLAIN;
+      const duration = isLevelExplain 
+        ? Math.floor((currentDrillPlan?.durationSeconds || 120) / 2)
+        : (currentDrillPlan?.durationSeconds || 60);
+      timer.start(duration);
+    }
   };
 
 
@@ -317,12 +359,14 @@ const DrillPage = () => {
             {(currentDrillPlan?.type === DRILL_TYPES.ONE_MINUTE_SPEECH || 
               currentDrillPlan?.type === DRILL_TYPES.SHADOW ||
               currentDrillPlan?.type === DRILL_TYPES.LEVEL_EXPLAIN ||
+              currentDrillPlan?.type === DRILL_TYPES.FILLER_RESET ||
               currentDrillPlan?.type === DRILL_TYPES.KEYWORDS) ? (
               <>
                 <span className="text-text-secondary uppercase tracking-widest font-semibold mb-4 text-sm">
                   {currentDrillPlan?.type === DRILL_TYPES.ONE_MINUTE_SPEECH ? 'Your Topic' : 
                    currentDrillPlan?.type === DRILL_TYPES.SHADOW ? 'Shadow This' : 
-                   currentDrillPlan?.type === DRILL_TYPES.LEVEL_EXPLAIN ? 'Level Explain' : 'Rapid-Fire Keywords'}
+                   currentDrillPlan?.type === DRILL_TYPES.LEVEL_EXPLAIN ? 'Level Explain' : 
+                   currentDrillPlan?.type === DRILL_TYPES.FILLER_RESET ? 'Filler Reset' : 'Rapid-Fire Keywords'}
                 </span>
                 <h1 className={`font-extrabold mb-12 leading-tight ${
                   (currentDrillPlan?.type === DRILL_TYPES.SHADOW || currentDrillPlan?.type === DRILL_TYPES.KEYWORDS)
@@ -338,8 +382,31 @@ const DrillPage = () => {
                     ? `Read the text above, then speak it back naturally. You can repeat it exactly or paraphrase. You have ${currentDrillPlan.durationSeconds} seconds.`
                     : currentDrillPlan?.type === DRILL_TYPES.LEVEL_EXPLAIN
                     ? `You'll explain this concept twice. First to a high-school student (simple), then to an expert (technical). Each phase gets ${Math.floor((currentDrillPlan.durationSeconds || 120)/2)} seconds.`
+                    : currentDrillPlan?.type === DRILL_TYPES.FILLER_RESET
+                    ? `Speak without using any filler words. In Easy mode, manually reset if you catch yourself. In Hard mode, the AI auto-resets you.`
                     : `Quickly list as many technical terms and keywords as possible related to the topic above. Accuracy and speed matter. You have ${currentDrillPlan.durationSeconds} seconds.`}
                 </p>
+
+                {currentDrillPlan?.type === DRILL_TYPES.FILLER_RESET && (
+                  <div className="flex gap-8 mb-12 bg-white/5 p-6 rounded-2xl border border-white/10">
+                    <div className="flex flex-col items-start gap-2">
+                      <label className="text-xs uppercase font-bold text-text-muted">Difficulty</label>
+                      <div className="flex gap-2">
+                        <button onClick={() => setFillerDifficulty('easy')} className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${fillerDifficulty === 'easy' ? 'bg-accent-primary text-white' : 'bg-white/10 hover:bg-white/20'}`}>Easy</button>
+                        <button onClick={() => setFillerDifficulty('hard')} className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${fillerDifficulty === 'hard' ? 'bg-danger text-white' : 'bg-white/10 hover:bg-white/20'}`}>Hard</button>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-start gap-2">
+                      <label className="text-xs uppercase font-bold text-text-muted">Duration</label>
+                      <div className="flex gap-2">
+                        {[30, 60, 120].map(d => (
+                          <button key={d} onClick={() => setFillerDuration(d)} className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${fillerDuration === d ? 'bg-accent-primary text-white' : 'bg-white/10 hover:bg-white/20'}`}>{d}s</button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <button 
                   onClick={startDrill}
                   className="btn btn-primary px-12 py-5 text-xl shadow-[0_0_30px_rgba(139,92,246,0.3)] hover:shadow-[0_0_40px_rgba(139,92,246,0.5)] transition-all"
@@ -364,7 +431,7 @@ const DrillPage = () => {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="flex flex-col items-center w-full gap-12"
+            className={`flex flex-col items-center w-full gap-12 transition-colors duration-300 ${isFlash ? 'bg-danger/20 p-8 rounded-3xl' : ''}`}
           >
             <div className="text-center">
               <span className="text-text-secondary uppercase tracking-widest font-semibold mb-2 block text-sm">
@@ -376,25 +443,53 @@ const DrillPage = () => {
                   Phase {activePhase}: Explain to {activePhase === 1 ? 'a High-School Student' : 'an Expert'}
                 </div>
               )}
+              {currentDrillPlan?.type === DRILL_TYPES.FILLER_RESET && (
+                <div className="mt-6 text-xl font-bold text-warning bg-warning/10 inline-block px-6 py-3 rounded-xl border border-warning/20">
+                  Resets: {resetCount}
+                </div>
+              )}
             </div>
 
-            <DrillTimer 
-              timeLeft={timer.timeLeft} 
-              duration={currentDrillPlan.durationSeconds} 
-              progress={timer.progress} 
-            />
+            {currentDrillPlan?.type === DRILL_TYPES.FILLER_RESET ? (
+              <DrillTimer 
+                time={countUpTimer.timeElapsed} 
+                duration={fillerDuration} 
+                progress={countUpTimer.progress} 
+                isCountUp={true}
+              />
+            ) : (
+              <DrillTimer 
+                time={timer.timeLeft} 
+                duration={currentDrillPlan.durationSeconds} 
+                progress={timer.progress} 
+              />
+            )}
 
             <LiveTranscriptBox 
               transcript={transcript.transcript}
               isListening={transcript.isListening}
             />
 
-            <button 
-              onClick={handleDrillComplete}
-              className="btn btn-secondary px-8 py-3 text-sm mt-4 hover:border-danger hover:text-danger hover:bg-danger/10"
-            >
-              End Early
-            </button>
+            <div className="flex gap-4 mt-4">
+              {currentDrillPlan?.type === DRILL_TYPES.FILLER_RESET && fillerDifficulty === 'easy' && (
+                <button 
+                  onClick={() => {
+                    setResetCount(prev => prev + 1);
+                    countUpTimer.reset();
+                    transcript.reset();
+                  }}
+                  className="btn bg-warning text-black px-8 py-3 text-sm font-bold hover:brightness-110"
+                >
+                  I used a filler (Reset)
+                </button>
+              )}
+              <button 
+                onClick={handleDrillComplete}
+                className="btn btn-secondary px-8 py-3 text-sm hover:border-danger hover:text-danger hover:bg-danger/10"
+              >
+                End Early
+              </button>
+            </div>
           </motion.div>
         )}
 

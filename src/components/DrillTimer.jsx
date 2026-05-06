@@ -1,16 +1,20 @@
 
 
-const DrillTimer = ({ timeLeft, duration, progress }) => {
+const DrillTimer = ({ time, duration, progress, isCountUp = false }) => {
   const radius = 120;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - progress * circumference;
 
-  // Determine color based on time left
+  // Determine color based on time and mode
   let colorClass = 'text-success';
-  if (timeLeft <= 10) {
-    colorClass = 'text-danger';
-  } else if (timeLeft <= duration / 2) {
-    colorClass = 'text-warning';
+  if (!isCountUp) {
+    if (time <= 10) {
+      colorClass = 'text-danger';
+    } else if (time <= duration / 2) {
+      colorClass = 'text-warning';
+    }
+  } else {
+    colorClass = 'text-accent-primary';
   }
 
   const formatTime = (seconds) => {
@@ -48,10 +52,10 @@ const DrillTimer = ({ timeLeft, duration, progress }) => {
       </svg>
       <div className="absolute flex flex-col items-center">
         <span className={`text-6xl font-bold font-mono ${colorClass}`}>
-          {formatTime(timeLeft)}
+          {formatTime(time)}
         </span>
         <span className="text-sm text-text-muted mt-2 font-medium tracking-widest uppercase">
-          Time Remaining
+          {isCountUp ? "Time Elapsed" : "Time Remaining"}
         </span>
       </div>
     </div>

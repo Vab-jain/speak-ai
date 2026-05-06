@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Save, ChevronDown, ChevronUp } from 'lucide-react';
-import { generateFeedback, generateLevelExplainFeedback } from '../utils/groqClient';
+import { generateFeedback, generateLevelExplainFeedback, generateFillerResetFeedback } from '../utils/groqClient';
 import { DRILL_TYPES } from '../utils/sessionEngine';
 
 const DrillAccordion = ({ drill, index }) => {
@@ -11,6 +11,7 @@ const DrillAccordion = ({ drill, index }) => {
 
   useEffect(() => {
     const isLevelExplain = drill.type === DRILL_TYPES.LEVEL_EXPLAIN;
+    const isFillerReset = drill.type === DRILL_TYPES.FILLER_RESET;
     const hasContent = isLevelExplain ? (drill.transcript1 && drill.transcript2) : drill.transcript;
 
     if (isOpen && !feedback && hasContent) {
@@ -20,6 +21,8 @@ const DrillAccordion = ({ drill, index }) => {
           let res;
           if (isLevelExplain) {
             res = await generateLevelExplainFeedback(drill.transcript1, drill.transcript2, drill.prompt);
+          } else if (isFillerReset) {
+            res = await generateFillerResetFeedback(drill.transcript, drill.resetCount, drill.fillerDifficulty, drill.targetDuration);
           } else {
             res = await generateFeedback(drill.transcript, drill.prompt);
           }
@@ -49,6 +52,14 @@ const DrillAccordion = ({ drill, index }) => {
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3 text-sm font-medium text-text-secondary">
+            {drill.type === DRILL_TYPES.FILLER_RESET && (
+              <>
+                <span className={drill.resetCount > 0 ? "text-warning" : "text-success"}>
+                  {drill.resetCount} Resets ({drill.fillerDifficulty})
+                </span>
+                <span>•</span>
+              </>
+            )}
             <span>{drill.metrics.wpm} WPM</span>
             <span>•</span>
             <span className={drill.metrics.fillerCount > 0 ? "text-warning" : ""}>
