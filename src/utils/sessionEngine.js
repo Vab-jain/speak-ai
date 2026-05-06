@@ -74,8 +74,9 @@ export function swapDrill(drills, drillId, mode) {
   if (index === -1) return drills;
 
   const newDrills = [...drills];
-  const types = Object.values(DRILL_TYPES);
-  const newType = types[Math.floor(Math.random() * types.length)];
+  const currentType = drills[index].type;
+  const otherTypes = Object.values(DRILL_TYPES).filter(t => t !== currentType);
+  const newType = otherTypes[Math.floor(Math.random() * otherTypes.length)];
   
   newDrills[index] = createDrill(newType, mode);
   return newDrills;

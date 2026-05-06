@@ -10,6 +10,7 @@ const LandingPage = () => {
   const { settings, updateSettings } = useSettings();
   const [streak] = useState(() => getStreak());
   const [longestStreak] = useState(() => getLongestStreak());
+  const [selectedMode, setSelectedMode] = useState('technical');
   const isMilestone = streak >= 3;
 
   return (
@@ -54,8 +55,8 @@ const LandingPage = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full mb-12">
         <button
-          onClick={() => navigate('/drill?mode=technical')}
-          className="glass-card flex flex-col items-start p-8 text-left hover:border-accent-primary group transition-all"
+          onClick={() => setSelectedMode('technical')}
+          className={`glass-card flex flex-col items-start p-8 text-left hover:border-accent-primary group transition-all ${selectedMode === 'technical' ? 'border-accent-primary/60 bg-accent-primary/5' : ''}`}
         >
           <div className="p-3 bg-accent-primary/10 rounded-xl text-accent-primary mb-6 group-hover:scale-110 transition-transform">
             <Cpu size={32} />
@@ -65,8 +66,8 @@ const LandingPage = () => {
         </button>
 
         <button
-          onClick={() => navigate('/drill?mode=general')}
-          className="glass-card flex flex-col items-start p-8 text-left hover:border-accent-secondary group transition-all"
+          onClick={() => setSelectedMode('general')}
+          className={`glass-card flex flex-col items-start p-8 text-left hover:border-accent-secondary group transition-all ${selectedMode === 'general' ? 'border-accent-secondary/60 bg-accent-secondary/5' : ''}`}
         >
           <div className="p-3 bg-accent-secondary/10 rounded-xl text-accent-secondary mb-6 group-hover:scale-110 transition-transform">
             <MessageSquare size={32} />
@@ -95,7 +96,7 @@ const LandingPage = () => {
         </div>
         
         <button 
-          onClick={() => navigate(`/drill?mode=general`)}
+          onClick={() => navigate(`/drill?mode=${selectedMode}`)}
           className="btn btn-primary px-12 py-4 text-xl rounded-2xl"
         >
           <Play size={24} fill="white" />
