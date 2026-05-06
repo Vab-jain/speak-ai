@@ -1,20 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Play, Flame, Clock, Cpu, MessageSquare } from 'lucide-react';
+import { Play, Flame, Clock, Cpu, MessageSquare, Trophy } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useSettings } from '../context/SettingsContext';
-import { getStreak } from '../utils/progressStore';
+import { getStreak, getLongestStreak } from '../utils/progressStore';
 
 const LandingPage = () => {
   const navigate = useNavigate();
   const { settings, updateSettings } = useSettings();
   const [streak] = useState(() => getStreak());
-
-  useEffect(() => {
-    // Already initialized in useState, but we can keep this for future updates if needed
-    // or remove it if streak only changes on session completion.
-    // For now, let's just use the initializer.
-  }, []);
+  const [longestStreak] = useState(() => getLongestStreak());
+  const isMilestone = streak >= 3;
 
   return (
     <div className="max-w-4xl mx-auto px-6 pt-20 flex flex-col items-center text-center">
@@ -24,9 +20,28 @@ const LandingPage = () => {
         transition={{ duration: 0.5 }}
         className="mb-12"
       >
-        <div className="inline-flex items-center gap-2 px-4 py-2 bg-accent-primary/10 text-accent-primary rounded-full mb-6 font-semibold border border-accent-primary/20">
-          <Flame size={18} fill="currentColor" />
-          <span>{streak} DAY STREAK</span>
+        {/* Streak badge */}
+        <div className="flex flex-col items-center gap-2 mb-8">
+          <motion.div
+            animate={isMilestone ? { scale: [1, 1.04, 1] } : {}}
+            transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
+            className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-full font-bold text-lg border ${
+              isMilestone
+                ? 'bg-orange-500/10 border-orange-400/40 text-orange-400 shadow-[0_0_24px_rgba(251,146,60,0.3)]'
+                : streak > 0
+                ? 'bg-accent-primary/10 text-accent-primary border-accent-primary/20'
+                : 'bg-white/5 text-text-muted border-border'
+            }`}
+          >
+            <Flame size={20} fill={isMilestone ? 'currentColor' : 'none'} />
+            <span>{streak} DAY STREAK</span>
+          </motion.div>
+          {longestStreak > 0 && (
+            <div className="inline-flex items-center gap-1.5 text-xs text-text-muted font-medium">
+              <Trophy size={12} />
+              <span>Best: {longestStreak} days</span>
+            </div>
+          )}
         </div>
         <h1 className="text-5xl md:text-7xl font-extrabold mb-6">
           Level Up Your <span className="gradient-text">Communication</span>

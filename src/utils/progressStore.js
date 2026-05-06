@@ -101,3 +101,90 @@ export function getStreak() {
 export function getSessions() {
   return getStore().sessions;
 }
+
+/**
+ * Computes the longest streak ever achieved by looking at consecutive session dates.
+ * @returns {number}
+ */
+export function getLongestStreak() {
+  const sessions = getStore().sessions;
+  if (!sessions.length) return 0;
+
+  // Get unique practice days as YYYY-MM-DD strings, sorted
+  const days = [...new Set(sessions.map(s => s.date.slice(0, 10)))].sort();
+
+  let longest = 1;
+  let current = 1;
+  for (let i = 1; i < days.length; i++) {
+    const prev = new Date(days[i - 1]);
+    const curr = new Date(days[i]);
+    const diff = Math.round((curr - prev) / (1000 * 60 * 60 * 24));
+    if (diff === 1) {
+      current++;
+      longest = Math.max(longest, current);
+    } else {
+      current = 1;
+    }
+  }
+  return longest;
+}
+
+/**
+ * Returns heatmap data for the last N days.
+ * Each entry: { date: 'YYYY-MM-DD', count: number }
+ * @param {number} days
+ * @returns {Array<{date: string, count: number}>}
+ */
+export function getHeatmapData(days = 30) {
+  const sessions = getStore().sessions;
+  const countsByDay = {};
+  sessions.forEach(s => {
+    const day = s.date.slice(0, 10);
+    countsByDay[day] = (countsByDay[day] || 0) + 1;
+  });
+
+  const result = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    result.push({ date: key, count: countsByDay[key] || 0 });
+  }
+  return result;
+}
+
+/**
+ * Returns per-session self-rating trend data.
+ * @returns {Array<{date: string, clarity: number, confidence: number, vocabulary: number}>}
+ */
+export function getSelfRatingTrend() {
+  const sessions = getStore().sessions;
+  return sessions
+    .filter(s => s.selfRating)
+    .map(s => ({
+      date: s.date.slice(0, 10),
+      clarity: s.selfRating.clarity ?? 0,
+      confidence: s.selfRating.confidence ?? 0,
+      vocabulary: s.selfRating.vocabulary ?? 0,
+    }));
+}
+
+/**
+ * Returns per-session average WPM and filler count trend.
+ * @returns {Array<{date: string, avgWpm: number, avgFillerCount: number}>}
+ */
+export function getMetricsTrend() {
+  const sessions = getStore().sessions;
+  return sessions
+    .filter(s => s.drills && s.drills.length > 0)
+    .map(s => {
+      const drills = s.drills;
+      const avgWpm = Math.round(
+        drills.reduce((sum, d) => sum + (d.metrics?.wpm || 0), 0) / drills.length
+      );
+      const avgFillerCount = Math.round(
+        drills.reduce((sum, d) => sum + (d.metrics?.fillerCount || 0), 0) / drills.length
+      );
+      return { date: s.date.slice(0, 10), avgWpm, avgFillerCount };
+    });
+}
