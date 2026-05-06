@@ -3,24 +3,17 @@
  * LocalStorage persistence layer for session history and streak calculation.
  */
 
+import { readStorage, writeStorage } from './storageAdapter';
+
 const STORAGE_KEY = 'speakup_progress';
+const getDefaultState = () => ({ sessions: [], streak: { current: 0, lastDate: null } });
 
 function getStore() {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : { sessions: [], streak: { current: 0, lastDate: null } };
-  } catch (err) {
-    console.error('Failed to parse progress from localStorage', err);
-    return { sessions: [], streak: { current: 0, lastDate: null } };
-  }
+  return readStorage(STORAGE_KEY, getDefaultState());
 }
 
 function saveStore(data) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch (err) {
-    console.error('Failed to save progress to localStorage', err);
-  }
+  writeStorage(STORAGE_KEY, data);
 }
 
 /**

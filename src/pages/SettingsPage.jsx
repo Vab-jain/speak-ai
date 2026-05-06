@@ -1,7 +1,8 @@
 import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Eye, EyeOff, Plus, X, Save, Key, Cpu, MessageSquare, Download, Upload, Database } from 'lucide-react';
+import { Eye, EyeOff, Plus, X, Key, Cpu, MessageSquare, Download, Upload, Database } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
+import { exportStorage, importStorage, writeStorage } from '../utils/storageAdapter';
 
 const TopicManager = ({ title, topics, onAdd, onRemove, icon: Icon, color }) => {
   const [newTopic, setNewTopic] = useState('');
@@ -59,20 +60,10 @@ const TopicManager = ({ title, topics, onAdd, onRemove, icon: Icon, color }) => 
 const SettingsPage = () => {
   const { settings, updateSettings, overwriteSettings } = useSettings();
   const [showApiKey, setShowApiKey] = useState(false);
-  const [isSaved, setIsSaved] = useState(false);
   const fileInputRef = useRef(null);
 
-  const handleSave = () => {
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 2000);
-  };
-
   const handleExport = () => {
-    const data = {
-      speakup_settings: JSON.parse(localStorage.getItem('speakup_settings') || '{}'),
-      speakup_progress: JSON.parse(localStorage.getItem('speakup_progress') || '{}')
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const blob = exportStorage(['speakup_settings', 'speakup_progress']);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -90,24 +81,20 @@ const SettingsPage = () => {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const data = JSON.parse(event.target.result);
-        if (data.speakup_progress) {
-          localStorage.setItem('speakup_progress', JSON.stringify(data.speakup_progress));
-        }
-        if (data.speakup_settings) {
-          overwriteSettings(data.speakup_settings);
-        }
-        alert("Data imported successfully! The page will now reload.");
-        window.location.reload();
-      } catch (err) {
-        alert("Invalid JSON file. Import failed.");
-        console.error("Import error:", err);
+    importStorage(file, (data) => {
+      if (data.speakup_progress) {
+        writeStorage('speakup_progress', data.speakup_progress);
       }
-    };
-    reader.readAsText(file);
+      if (data.speakup_settings) {
+        overwriteSettings(data.speakup_settings);
+      }
+      alert("Data imported successfully! The page will now reload.");
+      window.location.reload();
+    }, (err) => {
+      alert("Invalid JSON file. Import failed.");
+      console.error("Import error:", err);
+    });
+    
     e.target.value = '';
   };
 
@@ -118,16 +105,6 @@ const SettingsPage = () => {
           <h1 className="text-3xl font-extrabold mb-2">Settings</h1>
           <p className="text-text-secondary">Configure your preferences and API keys.</p>
         </div>
-        {isSaved && (
-          <motion.div 
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="flex items-center gap-2 text-success font-medium bg-success/10 px-4 py-2 rounded-lg border border-success/20"
-          >
-            <Save size={18} />
-            Saved!
-          </motion.div>
-        )}
       </div>
 
       <section className="glass-card mb-8">
@@ -215,12 +192,9 @@ const SettingsPage = () => {
         </div>
       </section>
 
-      <div className="flex justify-end">
-        <button onClick={handleSave} className="btn btn-primary px-8">
-          <Save size={20} />
-          Save Settings
-        </button>
-      </div>
+      <p className="text-xs text-text-muted text-center mt-4">
+        All settings are auto-saved to your browser.
+      </p>
     </div>
   );
 };

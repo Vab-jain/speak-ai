@@ -1,21 +1,23 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { readStorage, writeStorage } from '../utils/storageAdapter';
 
 const SettingsContext = createContext();
 
+const DEFAULT_SETTINGS = {
+  groqApiKey: '',
+  technicalTopics: ['Machine Learning', 'System Design', 'Reinforcement Learning', 'RAG'],
+  generalTopics: ['Leadership', 'Communication', 'Storytelling', 'Daily Routine'],
+  durationPreference: 10,
+  fillerWords: ['um', 'uh', 'like', 'you know', 'basically', 'sort of', 'kind of', 'actually', 'literally', 'right', 'so', 'i mean'],
+};
+
 export const SettingsProvider = ({ children }) => {
   const [settings, setSettings] = useState(() => {
-    const saved = localStorage.getItem('speakup_settings');
-    return saved ? JSON.parse(saved) : {
-      groqApiKey: '',
-      technicalTopics: ['Machine Learning', 'System Design', 'Reinforcement Learning', 'RAG'],
-      generalTopics: ['Leadership', 'Communication', 'Storytelling', 'Daily Routine'],
-      durationPreference: 10,
-      fillerWords: ['um', 'uh', 'like', 'you know', 'basically', 'sort of', 'kind of', 'actually', 'literally', 'right', 'so', 'i mean'],
-    };
+    return readStorage('speakup_settings', DEFAULT_SETTINGS);
   });
 
   useEffect(() => {
-    localStorage.setItem('speakup_settings', JSON.stringify(settings));
+    writeStorage('speakup_settings', settings);
   }, [settings]);
 
   const updateSettings = (newSettings) => {
