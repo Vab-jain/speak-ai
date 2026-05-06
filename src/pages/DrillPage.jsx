@@ -1,25 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 
-import { useSettings } from '../context/SettingsContext';
-import { generateSession, swapDrill, removeDrill, DRILL_TYPES } from '../utils/sessionEngine';
-import { generatePrompt } from '../utils/promptGenerator';
-import { evaluateDrill, countFillers } from '../utils/evaluationEngine';
-import { saveSession } from '../utils/progressStore';
-import { transcribeAudio } from '../utils/groqClient';
-
-import { useDrillTimer } from '../hooks/useDrillTimer';
-import { useCountUpTimer } from '../hooks/useCountUpTimer';
-import { useLiveTranscript } from '../hooks/useLiveTranscript';
-import { useAudioRecorder } from '../hooks/useAudioRecorder';
+import { DRILL_TYPES } from '../utils/sessionEngine';
+import { useDrillOrchestrator, STAGES } from '../hooks/useDrillOrchestrator';
 
 import DrillTimer from '../components/DrillTimer';
 import LiveTranscriptBox from '../components/LiveTranscriptBox';
 import MiniStatsCard from '../components/MiniStatsCard';
 import SessionSummary from '../components/SessionSummary';
 import SessionPreview from '../components/SessionPreview';
-import DrillPlaceholder from '../components/DrillPlaceholder';
+
 import { XCircle, ChevronRight } from 'lucide-react';
 
 // Helper to parse query params
@@ -27,278 +17,39 @@ function useQuery() {
   return new URLSearchParams(useLocation().search);
 }
 
-const STAGES = {
-  PREVIEW: 'PREVIEW',
-  PROMPT: 'PROMPT',
-  ACTIVE: 'ACTIVE',
-  STATS: 'STATS',
-  SUMMARY: 'SUMMARY',
-};
-
 const DrillPage = () => {
   const query = useQuery();
   const navigate = useNavigate();
-  const { settings } = useSettings();
-
   const queryMode = query.get('mode') || 'technical';
   
-  const [sessionPlan, setSessionPlan] = useState([]);
-  const [currentDrillIndex, setCurrentDrillIndex] = useState(0);
-  const [stage, setStage] = useState(STAGES.PREVIEW);
-  const [completedDrills, setCompletedDrills] = useState([]);
-  
-  // Phase state for multi-phase drills like Level Explain
-  const [activePhase, setActivePhase] = useState(1);
-  const [phase1Data, setPhase1Data] = useState(null);
-
-  // State for Filler Reset drill
-  const [fillerDifficulty, setFillerDifficulty] = useState('easy');
-  const [fillerDuration, setFillerDuration] = useState(60);
-  const [resetCount, setResetCount] = useState(0);
-  const [isFlash, setIsFlash] = useState(false);
-
-  // State for the current drill
-  const [currentPrompt, setCurrentPrompt] = useState('');
-  const [currentMetrics, setCurrentMetrics] = useState(null);
-
-  // Hooks
-  const timer = useDrillTimer();
-  const countUpTimer = useCountUpTimer();
-  const transcript = useLiveTranscript();
-  const recorder = useAudioRecorder();
-
-  // Initialize session on mount
-  useEffect(() => {
-    const initializeSession = async () => {
-      const duration = settings.durationPreference || 10;
-      const plan = generateSession(duration, queryMode);
-      
-      // Generate prompts for all drills initially for the preview
-      const planWithPrompts = await Promise.all(plan.map(async drill => ({
-        ...drill,
-        prompt: await generatePrompt(
-          drill.type, 
-          queryMode, 
-          queryMode === 'technical' ? settings.technicalTopics : settings.generalTopics
-        )
-      })));
-
-      setSessionPlan(planWithPrompts);
-    };
-    initializeSession();
-  }, []);
-
-  const handleSwap = async (drillId) => {
-    const newPlan = swapDrill(sessionPlan, drillId, queryMode);
-    // Regenerate prompt for the swapped drill
-    const updatedPlan = await Promise.all(newPlan.map(async d => {
-      if (d.id === drillId) {
-        return {
-          ...d,
-          prompt: await generatePrompt(
-            d.type, 
-            queryMode, 
-            queryMode === 'technical' ? settings.technicalTopics : settings.generalTopics
-          )
-        };
-      }
-      return d;
-    }));
-    setSessionPlan(updatedPlan);
-  };
-
-  const handleRemove = (drillId) => {
-    setSessionPlan(removeDrill(sessionPlan, drillId));
-  };
-
-  const startSession = () => {
-    if (sessionPlan.length > 0) {
-      setCurrentDrillIndex(0);
-      setCurrentPrompt(sessionPlan[0].prompt);
-      setStage(STAGES.PROMPT);
-    }
-  };
-
-  const currentDrillPlan = sessionPlan[currentDrillIndex];
-
-  const handleDrillComplete = useCallback(async () => {
-    transcript.stop();
-    const audioBlob = await recorder.stop(); // We capture this even if we don't upload it yet
-    
-    let finalTranscript = transcript.transcript;
-    if (audioBlob) {
-      try {
-        finalTranscript = await transcribeAudio(audioBlob);
-      } catch (err) {
-        console.error("Whisper transcription failed, using live transcript", err);
-      }
-    }
-
-    // Evaluate metrics using the final transcript
-    const fillerWords = settings.fillerWords; // Defined in SettingsContext defaults
-    const isLevelExplain = currentDrillPlan?.type === DRILL_TYPES.LEVEL_EXPLAIN;
-    const isFillerReset = currentDrillPlan?.type === DRILL_TYPES.FILLER_RESET;
-    const phaseDuration = isLevelExplain 
-      ? Math.floor((currentDrillPlan?.durationSeconds || 120) / 2)
-      : isFillerReset ? fillerDuration : (currentDrillPlan?.durationSeconds || 60);
-
-    const metrics = evaluateDrill(finalTranscript, phaseDuration, fillerWords);
-
-    if (isLevelExplain && activePhase === 1) {
-      setPhase1Data({
-        transcript: metrics.transcript,
-        metrics: { wpm: metrics.wpm, fillerCount: metrics.fillerCount },
-        detectedFillers: metrics.detectedFillers,
-        audioBlob
-      });
-      setActivePhase(2);
-      transcript.reset();
-      transcript.start();
-      await recorder.start();
-      timer.start(phaseDuration);
-      return; // Stay in ACTIVE stage
-    }
-
-    let finalDrillRecord;
-
-    if (isLevelExplain && activePhase === 2) {
-      // Combine Phase 1 and Phase 2 metrics for summary
-      const combinedWpm = Math.round((phase1Data.metrics.wpm + metrics.wpm) / 2);
-      const combinedFillerCount = phase1Data.metrics.fillerCount + metrics.fillerCount;
-      const combinedDetectedFillers = [...phase1Data.detectedFillers, ...metrics.detectedFillers];
-      
-      finalDrillRecord = {
-        id: currentDrillPlan.id,
-        type: currentDrillPlan.type,
-        mode: currentDrillPlan.mode,
-        prompt: currentPrompt,
-        transcript: null, 
-        transcript1: phase1Data.transcript,
-        transcript2: metrics.transcript,
-        metrics: { wpm: combinedWpm, fillerCount: combinedFillerCount },
-        detectedFillers: combinedDetectedFillers,
-        audioBlob1: phase1Data.audioBlob,
-        audioBlob2: audioBlob,
-      };
-      setCurrentMetrics({
-        wpm: combinedWpm,
-        fillerCount: combinedFillerCount,
-        detectedFillers: combinedDetectedFillers
-      });
-    } else {
-      finalDrillRecord = {
-        id: currentDrillPlan.id,
-        type: currentDrillPlan.type,
-        mode: currentDrillPlan.mode,
-        prompt: currentPrompt,
-        transcript: metrics.transcript,
-        metrics: { wpm: metrics.wpm, fillerCount: metrics.fillerCount },
-        detectedFillers: metrics.detectedFillers,
-        audioBlob,
-        ...(isFillerReset && { resetCount, fillerDifficulty, targetDuration: fillerDuration })
-      };
-      setCurrentMetrics(metrics);
-    }
-
-    setCompletedDrills(prev => [...prev, finalDrillRecord]);
-    setStage(STAGES.STATS);
-  }, [transcript, recorder, currentDrillPlan, currentPrompt, settings.fillerWords, activePhase, phase1Data, timer]);
-
-  // Auto-transition when timer ends
-  useEffect(() => {
-    if (stage === STAGES.ACTIVE) {
-      if (currentDrillPlan?.type === DRILL_TYPES.FILLER_RESET) {
-        if (!countUpTimer.isRunning && countUpTimer.timeElapsed >= fillerDuration) {
-          const timeout = setTimeout(() => handleDrillComplete(), 0);
-          return () => clearTimeout(timeout);
-        }
-      } else {
-        if (!timer.isRunning && timer.timeLeft === 0) {
-          const timeout = setTimeout(() => handleDrillComplete(), 0);
-          return () => clearTimeout(timeout);
-        }
-      }
-    }
-  }, [timer.isRunning, timer.timeLeft, countUpTimer.isRunning, countUpTimer.timeElapsed, stage, currentDrillPlan, fillerDuration, handleDrillComplete]);
-
-  // Hard mode auto-reset for FILLER_RESET
-  useEffect(() => {
-    if (
-      stage === STAGES.ACTIVE &&
-      currentDrillPlan?.type === DRILL_TYPES.FILLER_RESET &&
-      fillerDifficulty === 'hard' &&
-      transcript.transcript
-    ) {
-      const { count } = countFillers(transcript.transcript, settings.fillerWords);
-      if (count > 0) {
-        setResetCount(prev => prev + 1);
-        setIsFlash(true);
-        setTimeout(() => setIsFlash(false), 500);
-        transcript.reset();
-        countUpTimer.reset();
-        // timer continues running
-      }
-    }
-  }, [transcript.transcript, stage, currentDrillPlan, fillerDifficulty, settings.fillerWords, countUpTimer, transcript]);
-
-  const startDrill = async () => {
-    setStage(STAGES.ACTIVE);
-    setActivePhase(1);
-    setPhase1Data(null);
-    setResetCount(0);
-    transcript.start();
-    await recorder.start();
-    
-    if (currentDrillPlan?.type === DRILL_TYPES.FILLER_RESET) {
-      countUpTimer.start(fillerDuration);
-    } else {
-      const isLevelExplain = currentDrillPlan?.type === DRILL_TYPES.LEVEL_EXPLAIN;
-      const duration = isLevelExplain 
-        ? Math.floor((currentDrillPlan?.durationSeconds || 120) / 2)
-        : (currentDrillPlan?.durationSeconds || 60);
-      timer.start(duration);
-    }
-  };
-
-
-
-  const nextDrill = () => {
-    const nextIndex = currentDrillIndex + 1;
-    if (nextIndex < sessionPlan.length) {
-      // Setup next drill
-      setCurrentDrillIndex(nextIndex);
-      setCurrentPrompt(sessionPlan[nextIndex].prompt);
-      
-      // Reset state for new drill
-      timer.reset();
-      transcript.reset();
-      setCurrentMetrics(null);
-      setStage(STAGES.PROMPT);
-    } else {
-      // Session is over
-      setStage(STAGES.SUMMARY);
-    }
-  };
-
-  const endSessionEarly = () => {
-    if (completedDrills.length > 0) {
-      setStage(STAGES.SUMMARY);
-    } else {
-      navigate('/');
-    }
-  };
-
-
-  const finishSession = (sessionDataWithRating) => {
-    saveSession({
-      date: new Date().toISOString(),
-      mode: queryMode,
-      durationMinutes: settings.durationPreference,
-      drills: sessionDataWithRating.drills,
-      selfRating: sessionDataWithRating.selfRating
-    });
-    navigate('/');
-  };
+  const orchestrator = useDrillOrchestrator(queryMode);
+  const {
+    stage,
+    currentDrillPlan,
+    currentPrompt,
+    sessionPlan,
+    completedDrills,
+    currentMetrics,
+    timer,
+    countUpTimer,
+    transcript,
+    activePhase,
+    fillerDifficulty,
+    setFillerDifficulty,
+    fillerDuration,
+    setFillerDuration,
+    resetCount,
+    setResetCount,
+    isFlash,
+    startSession,
+    startDrill,
+    handleSwap,
+    handleRemove,
+    handleDrillComplete,
+    nextDrill,
+    endSessionEarly,
+    finishSession,
+  } = orchestrator;
 
   // Safe checks while initializing
   if (sessionPlan.length === 0) {
@@ -356,12 +107,7 @@ const DrillPage = () => {
             exit={{ opacity: 0, y: -20 }}
             className="flex flex-col items-center text-center w-full mt-4"
           >
-            {(currentDrillPlan?.type === DRILL_TYPES.ONE_MINUTE_SPEECH || 
-              currentDrillPlan?.type === DRILL_TYPES.SHADOW ||
-              currentDrillPlan?.type === DRILL_TYPES.LEVEL_EXPLAIN ||
-              currentDrillPlan?.type === DRILL_TYPES.FILLER_RESET ||
-              currentDrillPlan?.type === DRILL_TYPES.KEYWORDS) ? (
-              <>
+            <>
                 <span className="text-text-secondary uppercase tracking-widest font-semibold mb-4 text-sm">
                   {currentDrillPlan?.type === DRILL_TYPES.ONE_MINUTE_SPEECH ? 'Your Topic' : 
                    currentDrillPlan?.type === DRILL_TYPES.SHADOW ? 'Shadow This' : 
@@ -414,12 +160,6 @@ const DrillPage = () => {
                   Start Speaking
                 </button>
               </>
-            ) : (
-              <DrillPlaceholder 
-                drillType={currentDrillPlan?.label} 
-                onSwap={() => handleSwap(currentDrillPlan.id)} 
-              />
-            )}
           </motion.div>
         )}
 
