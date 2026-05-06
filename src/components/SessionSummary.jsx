@@ -3,8 +3,10 @@ import { motion } from 'framer-motion';
 import { Save, ChevronDown, ChevronUp } from 'lucide-react';
 import { generateFeedback, generateLevelExplainFeedback, generateFillerResetFeedback } from '../utils/groqClient';
 import { DRILL_TYPES } from '../utils/sessionEngine';
+import { useSettings } from '../context/SettingsContext';
 
 const DrillAccordion = ({ drill, index }) => {
+  const { settings } = useSettings();
   const [isOpen, setIsOpen] = useState(index === 0);
   const [feedback, setFeedback] = useState(null);
   const [isLoadingFeedback, setIsLoadingFeedback] = useState(false);
@@ -19,12 +21,13 @@ const DrillAccordion = ({ drill, index }) => {
         setIsLoadingFeedback(true);
         try {
           let res;
+          const opts = { apiKey: settings.groqApiKey };
           if (isLevelExplain) {
-            res = await generateLevelExplainFeedback(drill.transcript1, drill.transcript2, drill.prompt);
+            res = await generateLevelExplainFeedback(drill.transcript1, drill.transcript2, drill.prompt, opts);
           } else if (isFillerReset) {
-            res = await generateFillerResetFeedback(drill.transcript, drill.resetCount, drill.fillerDifficulty, drill.targetDuration);
+            res = await generateFillerResetFeedback(drill.transcript, drill.resetCount, drill.fillerDifficulty, drill.targetDuration, opts);
           } else {
-            res = await generateFeedback(drill.transcript, drill.prompt);
+            res = await generateFeedback(drill.transcript, drill.prompt, opts);
           }
           setFeedback(res);
         } catch (err) {
@@ -36,7 +39,7 @@ const DrillAccordion = ({ drill, index }) => {
       };
       fetchFeedback();
     }
-  }, [isOpen, feedback, drill]);
+  }, [isOpen, feedback, drill, settings.groqApiKey]);
 
   return (
     <div className="border border-border rounded-xl overflow-hidden mb-4 bg-white/5">

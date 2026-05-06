@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { generateGroqPrompt, generateFeedback } from './groqClient';
+import { generatePrompt, generateFeedback } from './groqClient';
 
 describe('groqClient', () => {
   beforeEach(() => {
@@ -15,7 +15,7 @@ describe('groqClient', () => {
   });
 
   it('should request a rich sentence or short paragraph for SHADOW drills', async () => {
-    await generateGroqPrompt('SHADOW', 'technical', ['AI']);
+    await generatePrompt('SHADOW', 'technical', ['AI']);
     
     const fetchArgs = vi.mocked(fetch).mock.calls[0];
     const body = JSON.parse(fetchArgs[1].body);
@@ -25,7 +25,7 @@ describe('groqClient', () => {
   });
 
   it('should request a technical topic for KEYWORDS drills', async () => {
-    await generateGroqPrompt('KEYWORDS', 'technical', ['Machine Learning']);
+    await generatePrompt('KEYWORDS', 'technical', ['Machine Learning']);
     
     const fetchArgs = vi.mocked(fetch).mock.calls[0];
     const body = JSON.parse(fetchArgs[1].body);
