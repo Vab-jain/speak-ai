@@ -25,6 +25,7 @@ const DrillPage = () => {
   const orchestrator = useDrillOrchestrator(queryMode);
   const {
     stage,
+    currentDrillIndex,
     currentDrillPlan,
     currentPrompt,
     sessionPlan,

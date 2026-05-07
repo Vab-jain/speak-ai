@@ -270,6 +270,7 @@ export function useDrillOrchestrator(queryMode) {
 
   return {
     stage,
+    currentDrillIndex,
     currentDrillPlan,
     currentPrompt,
     sessionPlan,
