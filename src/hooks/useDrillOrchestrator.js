@@ -217,12 +217,18 @@ export function useDrillOrchestrator(queryMode) {
   }, [transcript.transcript, stage, currentDrillPlan, fillerDifficulty, settings.fillerWords, countUpTimer, transcript]);
 
   const startDrill = async () => {
+    try {
+      await recorder.start();
+    } catch (err) {
+      console.error("Failed to start recorder", err);
+      // optionally handle error, but continue for now
+    }
+    transcript.start();
+    
     setStage(STAGES.ACTIVE);
     setActivePhase(1);
     setPhase1Data(null);
     setResetCount(0);
-    transcript.start();
-    await recorder.start();
     
     if (currentDrillPlan?.type === DRILL_TYPES.FILLER_RESET) {
       countUpTimer.start(fillerDuration);
