@@ -112,7 +112,7 @@ const DrillPage = () => {
                 <span className="text-text-secondary uppercase tracking-widest font-semibold mb-4 text-sm">
                   {currentDrillPlan?.type === DRILL_TYPES.ONE_MINUTE_SPEECH ? 'Your Topic' : 
                    currentDrillPlan?.type === DRILL_TYPES.SHADOW ? 'Shadow This' : 
-                   currentDrillPlan?.type === DRILL_TYPES.LEVEL_EXPLAIN ? 'Level Explain' : 
+                   currentDrillPlan?.type === DRILL_TYPES.LEVEL_EXPLAIN ? (activePhase === 1 ? 'Level Explain (Phase 1)' : 'Level Explain (Phase 2)') : 
                    currentDrillPlan?.type === DRILL_TYPES.FILLER_RESET ? 'Filler Reset' : 'Rapid-Fire Keywords'}
                 </span>
                 <h1 className={`font-extrabold mb-12 leading-tight ${
@@ -128,7 +128,9 @@ const DrillPage = () => {
                     : currentDrillPlan?.type === DRILL_TYPES.SHADOW
                     ? `Read the text above, then speak it back naturally. You can repeat it exactly or paraphrase. You have ${currentDrillPlan.durationSeconds} seconds.`
                     : currentDrillPlan?.type === DRILL_TYPES.LEVEL_EXPLAIN
-                    ? `You'll explain this concept twice. First to a high-school student (simple), then to an expert (technical). Each phase gets ${Math.floor((currentDrillPlan.durationSeconds || 120)/2)} seconds.`
+                    ? (activePhase === 1 
+                        ? `You'll explain this concept twice. First to a high-school student (simple), then to an expert (technical). Each phase gets ${Math.floor((currentDrillPlan.durationSeconds || 120)/2)} seconds.`
+                        : `Phase 1 complete! Now, explain the same concept to an expert (technical). You have ${Math.floor((currentDrillPlan.durationSeconds || 120)/2)} seconds.`)
                     : currentDrillPlan?.type === DRILL_TYPES.FILLER_RESET
                     ? `Speak without using any filler words. In Easy mode, manually reset if you catch yourself. In Hard mode, the AI auto-resets you.`
                     : `Quickly list as many technical terms and keywords as possible related to the topic above. Accuracy and speed matter. You have ${currentDrillPlan.durationSeconds} seconds.`}

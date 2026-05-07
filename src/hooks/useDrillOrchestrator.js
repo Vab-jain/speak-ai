@@ -93,6 +93,9 @@ export function useDrillOrchestrator(queryMode) {
     if (sessionPlan.length > 0) {
       setCurrentDrillIndex(0);
       setCurrentPrompt(sessionPlan[0].prompt);
+      setActivePhase(1);
+      setPhase1Data(null);
+      setResetCount(0);
       setStage(STAGES.PROMPT);
     }
   };
@@ -130,9 +133,7 @@ export function useDrillOrchestrator(queryMode) {
       });
       setActivePhase(2);
       transcript.reset();
-      transcript.start();
-      await recorder.start();
-      timer.start(phaseDuration);
+      setStage(STAGES.PROMPT);
       return; 
     }
 
@@ -226,9 +227,6 @@ export function useDrillOrchestrator(queryMode) {
     transcript.start();
     
     setStage(STAGES.ACTIVE);
-    setActivePhase(1);
-    setPhase1Data(null);
-    setResetCount(0);
     
     if (currentDrillPlan?.type === DRILL_TYPES.FILLER_RESET) {
       countUpTimer.start(fillerDuration);
@@ -249,6 +247,9 @@ export function useDrillOrchestrator(queryMode) {
       timer.reset();
       transcript.reset();
       setCurrentMetrics(null);
+      setActivePhase(1);
+      setPhase1Data(null);
+      setResetCount(0);
       setStage(STAGES.PROMPT);
     } else {
       setStage(STAGES.SUMMARY);
