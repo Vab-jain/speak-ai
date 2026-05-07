@@ -4,7 +4,7 @@ import { readStorage, writeStorage } from '../utils/storageAdapter';
 const SettingsContext = createContext();
 
 const DEFAULT_SETTINGS = {
-  groqApiKey: '',
+  groqApiKey: import.meta.env.VITE_GROQ_API_KEY || '',
   technicalTopics: ['Machine Learning', 'System Design', 'Reinforcement Learning', 'RAG'],
   generalTopics: ['Leadership', 'Communication', 'Storytelling', 'Daily Routine'],
   durationPreference: 10,
@@ -13,7 +13,12 @@ const DEFAULT_SETTINGS = {
 
 export const SettingsProvider = ({ children }) => {
   const [settings, setSettings] = useState(() => {
-    return readStorage('speakup_settings', DEFAULT_SETTINGS);
+    const stored = readStorage('speakup_settings', DEFAULT_SETTINGS);
+    // Force use of env variable if available, overriding stored empty values for MVP
+    if (import.meta.env.VITE_GROQ_API_KEY) {
+      stored.groqApiKey = import.meta.env.VITE_GROQ_API_KEY;
+    }
+    return stored;
   });
 
   useEffect(() => {
